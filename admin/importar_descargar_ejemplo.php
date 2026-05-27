@@ -8,6 +8,7 @@
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../config/importacion_helpers.php';
 
 requerir_login();

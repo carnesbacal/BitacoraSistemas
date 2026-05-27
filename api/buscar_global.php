@@ -123,6 +123,37 @@ if ($ver_kb) {
 }
 
 // ============================================================================
+// VAULT (bóveda) - respetando permisos del usuario
+// ============================================================================
+try {
+    // Verificar que las tablas del vault existan
+    $tabla_vault = db_one("SHOW TABLES LIKE 'vault_entradas'");
+    if ($tabla_vault) {
+        require_once __DIR__ . '/../config/vault_helpers.php';
+
+        $perm = vault_clausula_permisos($u);
+        $params_v = array_merge(
+            ['q1' => $like, 'q2' => $like, 'q3' => $like, 'q4' => $like],
+            $perm['params']
+        );
+
+        $resultados['vault'] = db_all(
+            "SELECT e.id, e.nombre, e.usuario, e.sensibilidad,
+                    c.nombre AS categoria_nombre, c.icono AS categoria_icono, c.color AS categoria_color,
+                    c.familia
+             FROM vault_entradas e
+             INNER JOIN vault_categorias c ON e.categoria_id = c.id
+             WHERE e.activo = 1
+               AND (e.nombre LIKE :q1 OR e.usuario LIKE :q2 OR e.tags LIKE :q3 OR e.notas LIKE :q4)
+               {$perm['sql']}
+             ORDER BY e.actualizado_en DESC
+             LIMIT 6",
+            $params_v
+        );
+    }
+} catch (Throwable $e) {}
+
+// ============================================================================
 // Construir respuesta agrupada
 // ============================================================================
 $grupos = [];
@@ -198,6 +229,33 @@ if (!empty($resultados['kb'])) {
         ];
     }
     $grupos[] = ['nombre' => 'Base de conocimiento', 'icono' => 'book-open', 'items' => $items];
+}
+
+if (!empty($resultados['vault'])) {
+    $items = [];
+    foreach ($resultados['vault'] as $r) {
+        $sens_label = match ($r['sensibilidad']) {
+            'critica' => 'CRÍTICA',
+            'alta' => 'ALTA',
+            default => null,
+        };
+        $sens_color = match ($r['sensibilidad']) {
+            'critica' => '#DC2626',
+            'alta' => '#F59E0B',
+            default => '#71717a',
+        };
+        $items[] = [
+            'tipo' => 'vault',
+            'titulo' => $r['nombre'],
+            'subtitulo' => $r['categoria_nombre'] . ' · ' . $r['familia'] .
+                          (!empty($r['usuario']) ? ' · @' . $r['usuario'] : ''),
+            'badge' => $sens_label,
+            'badge_color' => $sens_color,
+            'url' => url_relativa('vault_entrada.php?id=' . $r['id']),
+            'icono' => $r['categoria_icono'] ?: 'shield',
+        ];
+    }
+    $grupos[] = ['nombre' => 'Bóveda', 'icono' => 'shield', 'items' => $items];
 }
 
 echo json_encode([

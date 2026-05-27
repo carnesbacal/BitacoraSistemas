@@ -28,11 +28,11 @@ if (es_post()) {
         $op = (string) input('op', '');
         $tipo = (string) input('tipo', '');
 
-        if (!isset(IMPORTAR_COLUMNAS[$tipo])) {
-            $errores[] = 'Tipo inválido.';
-        } elseif ($op === 'previsualizar') {
-            // Subida + preview
-            if (!isset($_FILES['archivo']) || $_FILES['archivo']['error'] !== UPLOAD_ERR_OK) {
+        if ($op === 'previsualizar') {
+            // Validar tipo solo cuando se previsualiza (al confirmar viene de sesión)
+            if (!isset(IMPORTAR_COLUMNAS[$tipo])) {
+                $errores[] = 'Tipo inválido.';
+            } elseif (!isset($_FILES['archivo']) || $_FILES['archivo']['error'] !== UPLOAD_ERR_OK) {
                 $errores[] = 'No se recibió el archivo correctamente.';
             } elseif ($_FILES['archivo']['size'] > 10 * 1024 * 1024) {
                 $errores[] = 'Archivo demasiado grande (máximo 10 MB).';

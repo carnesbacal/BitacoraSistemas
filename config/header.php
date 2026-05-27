@@ -44,6 +44,11 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title><?= e($titulo_pagina) ?> · <?= e(APP_NAME) ?></title>
 
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="<?= url('favicon.png') ?>?v=1">
+    <link rel="shortcut icon" href="<?= url('favicon.ico') ?>?v=1">
+    <link rel="apple-touch-icon" href="<?= url('favicon.png') ?>?v=1">
+
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -753,6 +758,12 @@ function busquedaGlobal() {
                class="nav-item <?= $pagina_activa === 'recordatorios' ? 'nav-item-active' : 'text-zinc-700' ?> flex items-center gap-3 px-4 py-2.5 text-sm font-medium">
                 <i data-lucide="bell" class="w-5 h-5 flex-shrink-0 text-zinc-500"></i>
                 <span x-show="sidebarAbierto" x-transition.opacity>Recordatorios</span>
+            </a>
+
+            <a href="<?= url('vault.php') ?>"
+               class="nav-item <?= $pagina_activa === 'vault' ? 'nav-item-active' : 'text-zinc-700' ?> flex items-center gap-3 px-4 py-2.5 text-sm font-medium">
+                <i data-lucide="shield" class="w-5 h-5 flex-shrink-0 text-zinc-500"></i>
+                <span x-show="sidebarAbierto" x-transition.opacity>Bóveda</span>
             </a>
 
             <?php if (tiene_permiso('ver_reportes')): ?>
