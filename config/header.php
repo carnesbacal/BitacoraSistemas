@@ -722,6 +722,12 @@ function busquedaGlobal() {
                 <span x-show="sidebarAbierto" x-transition.opacity>Dashboard</span>
             </a>
 
+            <a href="<?= url('proyectos.php') ?>"
+             class="nav-item <?= $pagina_activa === 'proyectos' ? 'nav-item-active' : 'text-zinc-700' ?> flex items-center gap-3 px-4 py-2.5 text-sm font-medium">
+             <i data-lucide="folder-kanban" class="w-5 h-5 flex-shrink-0 text-zinc-500"></i>
+            <span x-show="sidebarAbierto" x-transition.opacity>Proyectos</span>
+            </a>
+
             <a href="<?= url('bitacora.php') ?>"
                class="nav-item <?= $pagina_activa === 'bitacora' ? 'nav-item-active' : 'text-zinc-700' ?> flex items-center gap-3 px-4 py-2.5 text-sm font-medium">
                 <i data-lucide="book-text" class="w-5 h-5 flex-shrink-0 text-zinc-500"></i>
@@ -811,6 +817,12 @@ function busquedaGlobal() {
                class="nav-item <?= $pagina_activa === 'admin_equipos' ? 'nav-item-active' : 'text-zinc-700' ?> flex items-center gap-3 px-4 py-2.5 text-sm font-medium">
                 <i data-lucide="monitor" class="w-5 h-5 flex-shrink-0 text-zinc-500"></i>
                 <span x-show="sidebarAbierto" x-transition.opacity>Equipos</span>
+            </a>
+
+            <a href="<?= url('estaciones.php') ?>"
+               class="nav-item <?= $pagina_activa === 'estaciones' ? 'nav-item-active' : 'text-zinc-700' ?> flex items-center gap-3 px-4 py-2.5 text-sm font-medium">
+                <i data-lucide="layout-grid" class="w-5 h-5 flex-shrink-0 text-zinc-500"></i>
+                <span x-show="sidebarAbierto" x-transition.opacity>Estaciones</span>
             </a>
 
             <a href="<?= url('admin/catalogos.php') ?>"

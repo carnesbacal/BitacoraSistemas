@@ -17,7 +17,7 @@ define('DB_CHARSET', 'utf8mb4');
 
 // --- Configuración global de la app ---
 define('APP_NAME', 'Carnes Bacal · Bitácora');
-define('APP_VERSION', '1.0.0');
+define('APP_VERSION', '1.5.1');
 
 /**
  * APP_URL se auto-detecta a partir de la ubicación real del proyecto.

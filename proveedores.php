@@ -532,18 +532,42 @@ else:
     <?php endif; ?>
 </div>
 
-<!-- Buscador -->
-<form method="GET" class="mb-4">
-    <div class="relative max-w-md">
-        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"></i>
-        <input type="text" name="q" value="<?= e($q) ?>"
-               placeholder="Buscar por nombre, servicio, razón social o email..."
-               class="w-full pl-9 pr-3 py-2 rounded-lg border border-zinc-300 bg-white text-sm focus:outline-none focus:border-bacal-700">
+<!-- Buscador + toggle de vista -->
+<div x-data="{
+    vista: localStorage.getItem('proveedores_vista') || 'tarjetas',
+    cambiar(v) { this.vista = v; localStorage.setItem('proveedores_vista', v); }
+}">
+
+<div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+    <form method="GET" class="flex-1 max-w-md">
+        <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"></i>
+            <input type="text" name="q" value="<?= e($q) ?>"
+                   placeholder="Buscar por nombre, servicio, razón social o email..."
+                   class="w-full pl-9 pr-3 py-2 rounded-lg border border-zinc-300 bg-white text-sm focus:outline-none focus:border-bacal-700">
+        </div>
+    </form>
+
+    <!-- Toggle de vista -->
+    <div class="inline-flex rounded-lg border border-zinc-300 bg-white p-0.5 shadow-sm">
+        <button type="button" @click="cambiar('tarjetas')"
+                :class="vista === 'tarjetas' ? 'bg-bacal-700 text-white shadow-sm' : 'text-zinc-600 hover:bg-zinc-50'"
+                class="px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors">
+            <i data-lucide="layout-grid" class="w-3.5 h-3.5"></i>
+            Tarjetas
+        </button>
+        <button type="button" @click="cambiar('lista')"
+                :class="vista === 'lista' ? 'bg-bacal-700 text-white shadow-sm' : 'text-zinc-600 hover:bg-zinc-50'"
+                class="px-3 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 transition-colors">
+            <i data-lucide="list" class="w-3.5 h-3.5"></i>
+            Lista
+        </button>
     </div>
-</form>
+</div>
 
 <!-- Tarjetas de proveedores -->
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+<!-- VISTA TARJETAS -->
+<div x-show="vista === 'tarjetas'" x-cloak class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
     <?php foreach ($proveedores as $p): ?>
     <div class="bg-white rounded-xl border border-zinc-200 shadow-sm p-5 hover:shadow-md transition-shadow group <?= !$p['activo'] ? 'opacity-50' : '' ?>">
 
@@ -652,6 +676,160 @@ else:
     </div>
     <?php endif; ?>
 </div>
+
+<!-- VISTA LISTA -->
+<div x-show="vista === 'lista'" x-cloak class="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+    <?php if (empty($proveedores)): ?>
+    <div class="text-center py-12">
+        <div class="w-16 h-16 mx-auto rounded-full bg-zinc-100 flex items-center justify-center mb-3">
+            <i data-lucide="search-x" class="w-8 h-8 text-zinc-400"></i>
+        </div>
+        <p class="text-sm font-medium text-zinc-700"><?= $q !== '' ? 'Sin resultados' : 'Sin proveedores registrados' ?></p>
+        <?php if ($puede_crear_editar && $q === ''): ?>
+        <a href="<?= url('proveedores.php?accion=nuevo') ?>"
+           class="mt-4 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-bacal-700 hover:bg-bacal-800 text-white text-sm font-semibold">
+            <i data-lucide="plus" class="w-4 h-4"></i> Agregar primero
+        </a>
+        <?php endif; ?>
+    </div>
+    <?php else: ?>
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-zinc-50 border-b border-zinc-200">
+                <tr>
+                    <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Proveedor</th>
+                    <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Servicio</th>
+                    <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Contacto</th>
+                    <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Calificación</th>
+                    <th class="px-4 py-2.5 text-center text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Equipos</th>
+                    <th class="px-4 py-2.5 text-center text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Escalados</th>
+                    <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Estado</th>
+                    <?php if ($puede_crear_editar || $puede_desactivar): ?>
+                    <th class="px-4 py-2.5"></th>
+                    <?php endif; ?>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-zinc-100">
+                <?php foreach ($proveedores as $p): ?>
+                <tr class="hover:bg-zinc-50 <?= !$p['activo'] ? 'opacity-50' : '' ?>">
+                    <!-- Proveedor -->
+                    <td class="px-4 py-2.5">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-8 h-8 rounded-md bg-bacal-700 text-white flex items-center justify-center font-display font-bold text-xs flex-shrink-0">
+                                <?= e(strtoupper(substr($p['nombre'], 0, 2))) ?>
+                            </div>
+                            <a href="<?= url('proveedor_ver.php?id=' . $p['id']) ?>"
+                               class="font-semibold text-sm text-zinc-900 hover:text-bacal-700">
+                                <?= e($p['nombre']) ?>
+                            </a>
+                        </div>
+                    </td>
+
+                    <!-- Servicio -->
+                    <td class="px-4 py-2.5 text-xs text-zinc-700">
+                        <?php if ($p['servicio']): ?>
+                            <?= e($p['servicio']) ?>
+                        <?php else: ?>
+                            <span class="text-zinc-400">—</span>
+                        <?php endif; ?>
+                        <?php if ($p['tipos_resumen']): ?>
+                        <div class="text-[10px] text-zinc-500 truncate max-w-[200px]" title="<?= e($p['tipos_resumen']) ?>">
+                            <i data-lucide="package" class="w-2.5 h-2.5 inline -mt-0.5"></i>
+                            <?= e($p['tipos_resumen']) ?>
+                        </div>
+                        <?php endif; ?>
+                    </td>
+
+                    <!-- Contacto -->
+                    <td class="px-4 py-2.5 text-xs">
+                        <?php if ($p['email']): ?>
+                        <a href="mailto:<?= e($p['email']) ?>" class="flex items-center gap-1 text-zinc-600 hover:text-bacal-700">
+                            <i data-lucide="mail" class="w-3 h-3 text-zinc-400"></i>
+                            <span class="truncate max-w-[160px]"><?= e($p['email']) ?></span>
+                        </a>
+                        <?php endif; ?>
+                        <?php if ($p['telefono']): ?>
+                        <a href="tel:<?= e($p['telefono']) ?>" class="flex items-center gap-1 text-zinc-600 hover:text-bacal-700 mt-0.5">
+                            <i data-lucide="phone" class="w-3 h-3 text-zinc-400"></i>
+                            <span><?= e($p['telefono']) ?></span>
+                        </a>
+                        <?php endif; ?>
+                        <?php if (!$p['email'] && !$p['telefono']): ?>
+                        <span class="text-zinc-400">—</span>
+                        <?php endif; ?>
+                    </td>
+
+                    <!-- Calificación -->
+                    <td class="px-4 py-2.5">
+                        <?php if ($p['calificacion']): ?>
+                        <div class="flex items-center gap-0.5">
+                            <?php for ($i = 1; $i <= 5; $i++): ?>
+                            <i data-lucide="star" class="w-3 h-3 <?= $i <= (int) $p['calificacion'] ? 'fill-amber-400 text-amber-400' : 'text-zinc-300' ?>"
+                               style="<?= $i <= (int) $p['calificacion'] ? 'fill: #FBBF24' : '' ?>"></i>
+                            <?php endfor; ?>
+                        </div>
+                        <?php else: ?>
+                        <span class="text-zinc-400 text-xs">—</span>
+                        <?php endif; ?>
+                    </td>
+
+                    <!-- Equipos -->
+                    <td class="px-4 py-2.5 text-center">
+                        <span class="font-display font-bold text-sm text-zinc-900"><?= $p['equipos_count'] ?></span>
+                    </td>
+
+                    <!-- Escalados -->
+                    <td class="px-4 py-2.5 text-center">
+                        <span class="font-display font-bold text-sm text-zinc-900"><?= $p['incidencias_count'] ?></span>
+                    </td>
+
+                    <!-- Estado -->
+                    <td class="px-4 py-2.5">
+                        <?php if ($p['activo']): ?>
+                        <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded uppercase text-emerald-700 bg-emerald-50">
+                            <i data-lucide="check" class="w-3 h-3"></i> Activo
+                        </span>
+                        <?php else: ?>
+                        <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded uppercase text-zinc-600 bg-zinc-100">
+                            <i data-lucide="power-off" class="w-3 h-3"></i> Inactivo
+                        </span>
+                        <?php endif; ?>
+                    </td>
+
+                    <!-- Acciones -->
+                    <?php if ($puede_crear_editar || $puede_desactivar): ?>
+                    <td class="px-4 py-2.5 text-right">
+                        <div class="flex items-center justify-end gap-1">
+                            <?php if ($puede_crear_editar): ?>
+                            <a href="<?= url('proveedores.php?accion=editar&id=' . $p['id']) ?>"
+                               class="p-1.5 rounded text-zinc-500 hover:bg-zinc-100 hover:text-bacal-700" title="Editar">
+                                <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                            </a>
+                            <?php endif; ?>
+                            <?php if ($puede_desactivar): ?>
+                            <form method="POST" action="<?= url('proveedores.php?accion=toggle&id=' . $p['id']) ?>"
+                                  onsubmit="return confirm('¿<?= $p['activo'] ? 'Desactivar' : 'Activar' ?> este proveedor?');"
+                                  class="inline">
+                                <?= csrf_input() ?>
+                                <input type="hidden" name="op" value="toggle">
+                                <button type="submit" class="p-1.5 rounded text-zinc-500 hover:bg-zinc-100 hover:text-bacal-700"
+                                        title="<?= $p['activo'] ? 'Desactivar' : 'Activar' ?>">
+                                    <i data-lucide="<?= $p['activo'] ? 'power' : 'power-off' ?>" class="w-3.5 h-3.5"></i>
+                                </button>
+                            </form>
+                            <?php endif; ?>
+                        </div>
+                    </td>
+                    <?php endif; ?>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <?php endif; ?>
+</div>
+
+</div><!-- /Alpine vista -->
 
 <?php endif; ?>
 

@@ -8,6 +8,7 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../config/admin_helpers.php';
+require_once __DIR__ . '/../config/equipos_helpers.php';
 
 $accion = (string) input('accion', 'listar');
 $id     = (int) input('id', 0);
@@ -336,11 +337,16 @@ if ($accion === 'nuevo' || ($accion === 'editar' && $equipo_edit)):
     $f_sucursal = (int) input('sucursal', 0);
     $f_tipo     = trim((string) input('tipo', ''));
     $f_q        = trim((string) input('q', ''));
+    $f_estado   = trim((string) input('estado_vida', ''));
 
     $where = [];
     $params = [];
     if ($f_sucursal > 0) { $where[] = "e.sucursal_id = :sid"; $params['sid'] = $f_sucursal; }
     if ($f_tipo !== '')  { $where[] = "e.tipo = :t"; $params['t'] = $f_tipo; }
+    if ($f_estado !== '' && in_array($f_estado, ['nuevo','en_uso','en_reparacion','dado_de_baja'], true)) {
+        $where[] = "e.estado_vida = :ev";
+        $params['ev'] = $f_estado;
+    }
     if ($f_q !== '')     {
         $where[] = "(e.codigo_inventario LIKE :q1 OR e.nombre LIKE :q2 OR e.marca LIKE :q3 OR e.modelo LIKE :q4)";
         $params['q1'] = "%$f_q%"; $params['q2'] = "%$f_q%"; $params['q3'] = "%$f_q%"; $params['q4'] = "%$f_q%";
@@ -363,6 +369,59 @@ if ($accion === 'nuevo' || ($accion === 'editar' && $equipo_edit)):
 
 <?php render_admin_header('Equipos / activos', count($equipos) . ' equipo(s) en inventario', url('admin/equipos.php?accion=nuevo'), 'Nuevo equipo'); ?>
 
+<?php
+// KPIs por estado (con mismos filtros excepto estado_vida)
+$where_kpi = $where;
+$params_kpi = $params;
+if (isset($params_kpi['ev'])) {
+    $where_kpi = array_filter($where_kpi, fn($w) => !str_contains($w, ':ev'));
+    unset($params_kpi['ev']);
+}
+$where_kpi_sql = !empty($where_kpi) ? 'WHERE ' . implode(' AND ', $where_kpi) : '';
+$kpi_estados = db_all(
+    "SELECT estado_vida, COUNT(*) c
+     FROM equipos e
+     $where_kpi_sql
+     GROUP BY estado_vida",
+    $params_kpi
+);
+$kpi_map = ['nuevo' => 0, 'en_uso' => 0, 'en_reparacion' => 0, 'dado_de_baja' => 0];
+foreach ($kpi_estados as $k) $kpi_map[$k['estado_vida']] = (int) $k['c'];
+$kpi_total = array_sum($kpi_map);
+?>
+
+<!-- KPIs por estado -->
+<div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+    <a href="<?= url('admin/equipos.php') . ($f_sucursal || $f_tipo || $f_q ? '?' . http_build_query(array_filter(['sucursal' => $f_sucursal ?: null, 'tipo' => $f_tipo ?: null, 'q' => $f_q ?: null])) : '') ?>"
+       class="bg-white rounded-xl border <?= $f_estado === '' ? 'border-bacal-300 bg-bacal-50' : 'border-zinc-200' ?> p-3 hover:shadow-sm transition-shadow">
+        <div class="text-[10px] text-zinc-500 uppercase tracking-wider font-bold">Total</div>
+        <div class="font-display text-2xl font-extrabold text-zinc-900"><?= $kpi_total ?></div>
+    </a>
+    <?php
+    $kpis_def = [
+        'nuevo' => ['label' => 'Nuevos', 'color' => 'emerald', 'colorHex' => '#16A34A'],
+        'en_uso' => ['label' => 'En uso', 'color' => 'blue', 'colorHex' => '#0EA5E9'],
+        'en_reparacion' => ['label' => 'En reparación', 'color' => 'amber', 'colorHex' => '#D97706'],
+        'dado_de_baja' => ['label' => 'Dado de baja', 'color' => 'zinc', 'colorHex' => '#6B7280'],
+    ];
+    foreach ($kpis_def as $est => $def):
+        $params_link = array_filter([
+            'estado_vida' => $est,
+            'sucursal' => $f_sucursal ?: null,
+            'tipo' => $f_tipo ?: null,
+            'q' => $f_q ?: null,
+        ]);
+        $url_filtro = url('admin/equipos.php') . '?' . http_build_query($params_link);
+        $activo = ($f_estado === $est);
+    ?>
+    <a href="<?= e($url_filtro) ?>"
+       class="bg-white rounded-xl border <?= $activo ? 'border-bacal-300 bg-bacal-50' : 'border-zinc-200' ?> p-3 hover:shadow-sm transition-shadow">
+        <div class="text-[10px] uppercase tracking-wider font-bold" style="color: <?= e($def['colorHex']) ?>"><?= e($def['label']) ?></div>
+        <div class="font-display text-2xl font-extrabold" style="color: <?= e($def['colorHex']) ?>"><?= $kpi_map[$est] ?></div>
+    </a>
+    <?php endforeach; ?>
+</div>
+
 <!-- Filtros -->
 <form method="GET" class="flex flex-wrap gap-2 mb-4">
     <div class="relative flex-1 min-w-[200px] max-w-md">
@@ -384,7 +443,15 @@ if ($accion === 'nuevo' || ($accion === 'editar' && $equipo_edit)):
         <option value="<?= e($t['tipo']) ?>" <?= $f_tipo === $t['tipo'] ? 'selected' : '' ?>><?= e($t['tipo']) ?></option>
         <?php endforeach; ?>
     </select>
-    <?php if ($f_q !== '' || $f_sucursal > 0 || $f_tipo !== ''): ?>
+    <select name="estado_vida" onchange="this.form.submit()"
+            class="px-3 py-2 rounded-lg border border-zinc-300 bg-white text-sm focus:outline-none focus:border-bacal-700">
+        <option value="">Todos los estados</option>
+        <option value="nuevo" <?= $f_estado === 'nuevo' ? 'selected' : '' ?>>🟢 Nuevo</option>
+        <option value="en_uso" <?= $f_estado === 'en_uso' ? 'selected' : '' ?>>🔵 En uso</option>
+        <option value="en_reparacion" <?= $f_estado === 'en_reparacion' ? 'selected' : '' ?>>🟠 En reparación</option>
+        <option value="dado_de_baja" <?= $f_estado === 'dado_de_baja' ? 'selected' : '' ?>>⚫ Dado de baja</option>
+    </select>
+    <?php if ($f_q !== '' || $f_sucursal > 0 || $f_tipo !== '' || $f_estado !== ''): ?>
     <a href="<?= url('admin/equipos.php') ?>" class="px-3 py-2 rounded-lg border border-zinc-300 text-zinc-700 text-sm hover:bg-zinc-50">Limpiar</a>
     <?php endif; ?>
 </form>
@@ -397,6 +464,7 @@ if ($accion === 'nuevo' || ($accion === 'editar' && $equipo_edit)):
                     <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Código</th>
                     <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Equipo</th>
                     <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Tipo</th>
+                    <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Estado</th>
                     <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Sucursal</th>
                     <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Área</th>
                     <th class="px-4 py-2.5 text-left text-[10px] font-bold text-zinc-500 uppercase tracking-wider">Proveedor</th>
@@ -417,6 +485,7 @@ if ($accion === 'nuevo' || ($accion === 'editar' && $equipo_edit)):
                         <?php endif; ?>
                     </td>
                     <td class="px-4 py-2.5 text-xs text-zinc-700"><?= e((string) $eq['tipo']) ?: '—' ?></td>
+                    <td class="px-4 py-2.5"><?= badge_estado_vida($eq['estado_vida'] ?? 'en_uso') ?></td>
                     <td class="px-4 py-2.5">
                         <span class="font-mono text-[10px] bg-zinc-100 text-zinc-600 px-1.5 py-0.5 rounded font-bold"><?= e($eq['sucursal_codigo']) ?></span>
                     </td>

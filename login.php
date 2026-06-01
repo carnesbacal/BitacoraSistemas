@@ -177,7 +177,7 @@ if (es_post()) {
 
             <!-- Footer marca -->
             <div class="flex items-center justify-between text-xs text-white/50">
-                <div>© <?= date('Y') ?> Carnes Bacal. Uso interno.</div>
+                <div>© <?= date('Y') ?> Carnes Bacal. Uso interno desarrollado por LFRC19.</div>
                 <div class="font-mono">v<?= APP_VERSION ?></div>
             </div>
         </div>
@@ -196,7 +196,7 @@ if (es_post()) {
                 </div>
                 <div>
                     <div class="font-display font-bold text-lg text-zinc-900">Carnes Bacal</div>
-                    <div class="text-[11px] text-bacal-700 uppercase tracking-widest font-semibold">Sistema Interno</div>
+                    <div class="text-[11px] text-bacal-700 uppercase tracking-widest font-semibold">Sistema Interno desarrollado por LFRC19</div>
                 </div>
             </div>
 

@@ -92,9 +92,26 @@ if ($planta_id) {
 }
 if (!$planta && !empty($plantas)) $planta = $plantas[0];
 
-// Equipos
+// Equipos y estaciones
 $equipos_en_mapa = $planta ? equipos_en_planta((int) $planta['id']) : [];
 $equipos_sin_ubicar = equipos_sin_planta_en_sucursal($sucursal_id);
+$estaciones_en_mapa = $planta ? estaciones_en_planta((int) $planta['id']) : [];
+$estaciones_sin_ubicar = estaciones_sin_planta_en_sucursal($sucursal_id);
+
+// IDs de estaciones ya posicionadas en ESTA planta
+$ids_estaciones_posicionadas = array_column($estaciones_en_mapa, 'id');
+
+// FILTRO IMPORTANTE: si un equipo pertenece a una estación que ya está posicionada,
+// NO mostrarlo individualmente en el mapa (se representará por el pin de su estación).
+// Sí lo mostramos si su estación está sin ubicar o si no tiene estación.
+$equipos_en_mapa = array_values(array_filter($equipos_en_mapa, function($eq) use ($ids_estaciones_posicionadas) {
+    return empty($eq['estacion_id']) || !in_array((int) $eq['estacion_id'], $ids_estaciones_posicionadas, true);
+}));
+
+// Equipos sin ubicar: ocultar los que ya pertenecen a una estación posicionada
+$equipos_sin_ubicar = array_values(array_filter($equipos_sin_ubicar, function($eq) use ($ids_estaciones_posicionadas) {
+    return empty($eq['estacion_id']) || !in_array((int) $eq['estacion_id'], $ids_estaciones_posicionadas, true);
+}));
 
 $titulo_pagina = 'Mapa de sucursal';
 $pagina_activa = 'mapa';
@@ -267,6 +284,17 @@ require_once __DIR__ . '/config/header.php';
                         <i data-lucide="alert-circle" class="w-3 h-3"></i>
                         <?php endif; ?>
                     </div>
+
+                    <!-- Botón remover del mapa (solo modo edición) -->
+                    <button type="button"
+                            x-show="modoEdicion && esAdmin"
+                            x-cloak
+                            @click.stop="removerEquipoDelMapa(<?= (int) $eq['id'] ?>, '<?= e(addslashes($eq['nombre'])) ?>')"
+                            class="absolute -top-2 -left-2 w-4 h-4 rounded-full bg-zinc-900 hover:bg-bacal-700 text-white flex items-center justify-center shadow-md z-30"
+                            title="Quitar del mapa">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+
                     <div class="absolute z-20 left-1/2 -translate-x-1/2 -top-2 -translate-y-full
                                 bg-zinc-900 text-white text-xs rounded-lg px-2.5 py-1.5 whitespace-nowrap
                                 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg">
@@ -282,19 +310,119 @@ require_once __DIR__ . '/config/header.php';
                 </div>
                 <?php endforeach; ?>
 
+                <?php
+                // Pins de ESTACIONES en el mapa
+                foreach ($estaciones_en_mapa as $est):
+                    $inc_abiertas = (int) $est['incidencias_abiertas'];
+                    $color_est = $inc_abiertas > 0 ? '#C8102E' : '#7C3AED'; // morado o rojo si tiene incidencias
+                ?>
+                <div class="absolute group z-10"
+                     data-estacion-id="<?= (int) $est['id'] ?>"
+                     data-pos-x="<?= e((string) $est['pos_x']) ?>"
+                     data-pos-y="<?= e((string) $est['pos_y']) ?>"
+                     style="left: <?= e((string) $est['pos_x']) ?>%; top: <?= e((string) $est['pos_y']) ?>%; transform: translate(-50%, -50%);"
+                     :class="modoEdicion ? 'cursor-move' : 'cursor-pointer'"
+                     @mousedown="iniciarArrastreEstacion($event, <?= (int) $est['id'] ?>)"
+                     @click.stop="abrirEstacion($event, <?= (int) $est['id'] ?>)">
+                    <!-- Pin compacto: solo cuadrado pequeño con conteo -->
+                    <div class="w-6 h-6 rounded-md border-2 border-white shadow-lg flex items-center justify-center text-white text-[10px] font-bold transition-transform hover:scale-125 relative"
+                         style="background-color: <?= e($color_est) ?>"
+                         title="<?= e($est['nombre']) ?> · <?= (int) $est['num_equipos'] ?> equipo(s)">
+                        <i data-lucide="layout-grid" class="w-3 h-3"></i>
+                        <span class="absolute -top-1.5 -right-1.5 bg-white text-zinc-900 rounded-full w-4 h-4 flex items-center justify-center text-[9px] font-bold border border-zinc-300"><?= (int) $est['num_equipos'] ?></span>
+                        <?php if ($inc_abiertas > 0): ?>
+                        <span class="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5">
+                            <i data-lucide="alert-circle" class="w-2.5 h-2.5 text-bacal-700"></i>
+                        </span>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Botón remover del mapa (solo modo edición) -->
+                    <button type="button"
+                            x-show="modoEdicion && esAdmin"
+                            x-cloak
+                            @click.stop="removerEstacionDelMapa(<?= (int) $est['id'] ?>, '<?= e(addslashes($est['nombre'])) ?>')"
+                            class="absolute -top-2 -left-2 w-4 h-4 rounded-full bg-zinc-900 hover:bg-bacal-700 text-white flex items-center justify-center shadow-md z-30"
+                            title="Quitar del mapa">
+                        <i data-lucide="x" class="w-3 h-3"></i>
+                    </button>
+
+                    <!-- Tooltip -->
+                    <div class="absolute z-20 left-1/2 -translate-x-1/2 -top-2 -translate-y-full
+                                bg-zinc-900 text-white text-xs rounded-lg px-2.5 py-1.5 whitespace-nowrap
+                                opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-lg">
+                        <div class="font-mono font-bold text-[10px] opacity-80"><?= e($est['codigo']) ?></div>
+                        <div class="font-semibold"><?= e($est['nombre']) ?></div>
+                        <div class="text-[10px] opacity-80 mt-0.5">
+                            <?= (int) $est['num_equipos'] ?> equipo(s)
+                        </div>
+                        <?php if ($inc_abiertas > 0): ?>
+                        <div class="text-[10px] text-bacal-300 mt-0.5">
+                            ⚠ <?= $inc_abiertas ?> incidencia(s) abierta(s)
+                        </div>
+                        <?php endif; ?>
+                        <div class="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-zinc-900"></div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+
                 <div x-show="arrastrandoDesdeFuera" x-cloak
                      class="absolute inset-0 bg-bacal-700/10 border-4 border-dashed border-bacal-700 pointer-events-none"></div>
             </div>
             <?php endif; ?>
         </div>
 
-        <!-- Sidebar de equipos sin ubicar -->
+        <!-- Sidebar de equipos y estaciones sin ubicar -->
         <div class="lg:col-span-1 space-y-3">
+
+            <!-- Bandeja de ESTACIONES sin ubicar (PRIMERO) -->
+            <?php if (!empty($estaciones_sin_ubicar)): ?>
+            <div class="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
+                <div class="px-4 py-3 border-b border-zinc-100 bg-purple-50">
+                    <h3 class="font-display text-sm font-bold text-zinc-900 flex items-center gap-1.5">
+                        <i data-lucide="layout-grid" class="w-4 h-4 text-purple-600"></i>
+                        Estaciones sin ubicar
+                        <span class="text-xs font-normal text-zinc-500">(<?= count($estaciones_sin_ubicar) ?>)</span>
+                    </h3>
+                </div>
+                <div class="max-h-[400px] overflow-y-auto">
+                    <?php foreach ($estaciones_sin_ubicar as $est):
+                        $color_est = (int) $est['incidencias_abiertas'] > 0 ? '#C8102E' : '#7C3AED';
+                    ?>
+                    <div class="px-3 py-2 border-b border-zinc-100 last:border-b-0 flex items-center gap-2 hover:bg-zinc-50"
+                         <?php if ($es_admin && $planta && !empty($planta['plano_url'])): ?>
+                         draggable="true"
+                         @dragstart="iniciarArrastreEstacionDesdeBandeja($event, <?= (int) $est['id'] ?>)"
+                         @dragend="terminarArrastreDesdeBandeja()"
+                         <?php endif; ?>>
+                        <div class="w-3 h-3 rounded-sm flex-shrink-0" style="background-color: <?= e($color_est) ?>"></div>
+                        <div class="flex-1 min-w-0">
+                            <div class="text-xs font-semibold text-zinc-900 truncate"><?= e($est['nombre']) ?></div>
+                            <div class="text-[10px] text-zinc-500">
+                                <span class="font-mono"><?= e($est['codigo']) ?></span>
+                                · <?= (int) $est['num_equipos'] ?> equipo(s)
+                            </div>
+                        </div>
+                        <?php if ($es_admin && $planta && !empty($planta['plano_url'])): ?>
+                        <i data-lucide="grip-vertical" class="w-3.5 h-3.5 text-zinc-400 flex-shrink-0"></i>
+                        <?php endif; ?>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <?php if ($es_admin && $planta && !empty($planta['plano_url'])): ?>
+                <div class="px-4 py-2 bg-purple-50 border-t border-purple-200 text-[10px] text-purple-900">
+                    💡 Arrastra al mapa para ubicar la estación completa
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+
+            <!-- Bandeja de EQUIPOS sin ubicar (SEGUNDO) -->
             <div class="bg-white rounded-xl border border-zinc-200 shadow-sm overflow-hidden">
                 <div class="px-4 py-3 border-b border-zinc-100 bg-zinc-50">
                     <h3 class="font-display text-sm font-bold text-zinc-900 flex items-center gap-1.5">
                         <i data-lucide="archive" class="w-4 h-4 text-zinc-500"></i>
-                        Sin ubicar
+                        Equipos sin ubicar
                         <span class="text-xs font-normal text-zinc-500">(<?= count($equipos_sin_ubicar) ?>)</span>
                     </h3>
                 </div>
@@ -341,17 +469,26 @@ require_once __DIR__ . '/config/header.php';
                 </h3>
                 <div class="space-y-1.5 text-xs text-zinc-700">
                     <div class="flex justify-between">
-                        <span>En esta planta</span>
+                        <span>Estaciones en esta planta</span>
+                        <span class="font-bold text-purple-600"><?= count($estaciones_en_mapa) ?></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Equipos sueltos en esta planta</span>
                         <span class="font-bold"><?= count($equipos_en_mapa) ?></span>
                     </div>
                     <div class="flex justify-between">
-                        <span>Sin ubicar (toda sucursal)</span>
+                        <span>Equipos sin ubicar</span>
                         <span class="font-bold"><?= count($equipos_sin_ubicar) ?></span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Estaciones sin ubicar</span>
+                        <span class="font-bold"><?= count($estaciones_sin_ubicar) ?></span>
                     </div>
                     <div class="flex justify-between pt-1.5 border-t border-zinc-100">
                         <span>Con problemas aquí</span>
                         <span class="font-bold text-bacal-700">
-                            <?= count(array_filter($equipos_en_mapa, fn($e) => (int) $e['incidencias_abiertas'] > 0)) ?>
+                            <?= count(array_filter($equipos_en_mapa, fn($e) => (int) $e['incidencias_abiertas'] > 0))
+                              + count(array_filter($estaciones_en_mapa, fn($e) => (int) $e['incidencias_abiertas'] > 0)) ?>
                         </span>
                     </div>
                 </div>
@@ -440,10 +577,25 @@ function mapaSucursal() {
         arrastrando: null,
         arrastrandoDesdeFuera: false,
 
+        // ============================================================
+        // ARRASTRE DE EQUIPOS YA EN EL MAPA
+        // ============================================================
         iniciarArrastre(evento, equipoId) {
             if (!this.modoEdicion || !this.esAdmin) return;
             evento.preventDefault();
-            this.arrastrando = { id: equipoId, elemento: evento.currentTarget };
+            this.arrastrando = { id: equipoId, tipo: 'equipo', elemento: evento.currentTarget };
+
+            document.addEventListener('mousemove', this.moverArrastre);
+            document.addEventListener('mouseup', this.soltarArrastre);
+        },
+
+        // ============================================================
+        // ARRASTRE DE ESTACIONES YA EN EL MAPA
+        // ============================================================
+        iniciarArrastreEstacion(evento, estacionId) {
+            if (!this.modoEdicion || !this.esAdmin) return;
+            evento.preventDefault();
+            this.arrastrando = { id: estacionId, tipo: 'estacion', elemento: evento.currentTarget };
 
             document.addEventListener('mousemove', this.moverArrastre);
             document.addEventListener('mouseup', this.soltarArrastre);
@@ -465,30 +617,56 @@ function mapaSucursal() {
         soltarArrastre: async (evento) => {
             const ctx = window._mapaCtx;
             if (!ctx || !ctx.arrastrando) return;
-            const id = ctx.arrastrando.id;
+            const { id, tipo } = ctx.arrastrando;
             const x = parseFloat(ctx.arrastrando.elemento.dataset.posX);
             const y = parseFloat(ctx.arrastrando.elemento.dataset.posY);
             document.removeEventListener('mousemove', ctx.moverArrastre);
             document.removeEventListener('mouseup', ctx.soltarArrastre);
             ctx.arrastrando = null;
-            await ctx.guardarPosicion(id, x, y);
+            if (tipo === 'estacion') {
+                await ctx.guardarPosicionEstacion(id, x, y);
+            } else {
+                await ctx.guardarPosicion(id, x, y);
+            }
         },
 
+        // ============================================================
+        // CLICK EN PINS
+        // ============================================================
         abrirEquipo(evento, equipoId) {
             if (this.modoEdicion) return;
             window.location.href = '<?= url('equipo_ver.php?id=') ?>' + equipoId;
         },
 
+        abrirEstacion(evento, estacionId) {
+            if (this.modoEdicion) return;
+            window.location.href = '<?= url('estacion_ver.php?id=') ?>' + estacionId;
+        },
+
+        // ============================================================
+        // ARRASTRE DESDE BANDEJA (drag&drop HTML5)
+        // ============================================================
         iniciarArrastreDesdeBandeja(evento, equipoId) {
             this.arrastrandoDesdeFuera = true;
             evento.dataTransfer.effectAllowed = 'move';
-            evento.dataTransfer.setData('text/plain', equipoId);
+            // Prefijo "eq:" indica equipo
+            evento.dataTransfer.setData('text/plain', 'eq:' + equipoId);
+        },
+
+        iniciarArrastreEstacionDesdeBandeja(evento, estacionId) {
+            this.arrastrandoDesdeFuera = true;
+            evento.dataTransfer.effectAllowed = 'move';
+            // Prefijo "est:" indica estación
+            evento.dataTransfer.setData('text/plain', 'est:' + estacionId);
         },
 
         terminarArrastreDesdeBandeja() {
             this.arrastrandoDesdeFuera = false;
         },
 
+        // ============================================================
+        // GUARDAR POSICIONES
+        // ============================================================
         async guardarPosicion(equipoId, x, y) {
             try {
                 const fd = new FormData();
@@ -508,6 +686,75 @@ function mapaSucursal() {
             }
         },
 
+        async guardarPosicionEstacion(estacionId, x, y) {
+            try {
+                const fd = new FormData();
+                fd.append('_csrf', '<?= e(csrf_token()) ?>');
+                fd.append('estacion_id', estacionId);
+                fd.append('planta_id', this.plantaId);
+                fd.append('pos_x', x);
+                fd.append('pos_y', y);
+
+                const resp = await fetch('<?= url('api/estacion_posicion.php') ?>', {
+                    method: 'POST', body: fd, credentials: 'same-origin'
+                });
+                const data = await resp.json();
+                if (!data.ok) alert('Error al guardar: ' + (data.error || 'desconocido'));
+            } catch (e) {
+                alert('Error de conexión: ' + e.message);
+            }
+        },
+
+        // ============================================================
+        // QUITAR DEL MAPA (deja sin ubicar, no elimina)
+        // ============================================================
+        async removerEquipoDelMapa(equipoId, nombre) {
+            if (!confirm('¿Quitar "' + nombre + '" del mapa?\n\nEl equipo no se elimina, solo vuelve a "Equipos sin ubicar".')) return;
+            try {
+                const fd = new FormData();
+                fd.append('_csrf', '<?= e(csrf_token()) ?>');
+                fd.append('equipo_id', equipoId);
+                // sin planta_id ni pos_x/pos_y → el endpoint desubica
+
+                const resp = await fetch('<?= url('api/equipo_posicion.php') ?>', {
+                    method: 'POST', body: fd, credentials: 'same-origin'
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'desconocido'));
+                }
+            } catch (e) {
+                alert('Error de conexión: ' + e.message);
+            }
+        },
+
+        async removerEstacionDelMapa(estacionId, nombre) {
+            if (!confirm('¿Quitar "' + nombre + '" del mapa?\n\nLa estación no se elimina, solo vuelve a "Estaciones sin ubicar".')) return;
+            try {
+                const fd = new FormData();
+                fd.append('_csrf', '<?= e(csrf_token()) ?>');
+                fd.append('estacion_id', estacionId);
+                // sin planta_id ni pos_x/pos_y → el endpoint desubica
+
+                const resp = await fetch('<?= url('api/estacion_posicion.php') ?>', {
+                    method: 'POST', body: fd, credentials: 'same-origin'
+                });
+                const data = await resp.json();
+                if (data.ok) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + (data.error || 'desconocido'));
+                }
+            } catch (e) {
+                alert('Error de conexión: ' + e.message);
+            }
+        },
+
+        // ============================================================
+        // SUBIR PLANO
+        // ============================================================
         async subirPlano(evento) {
             const archivo = evento.target.files[0];
             if (!archivo) return;
@@ -551,13 +798,34 @@ function mapaSucursal() {
 
             cont.addEventListener('drop', async (e) => {
                 e.preventDefault();
-                const equipoId = parseInt(e.dataTransfer.getData('text/plain'));
-                if (!equipoId) return;
+                const data = e.dataTransfer.getData('text/plain');
+                if (!data) return;
+
                 const rect = cont.getBoundingClientRect();
                 const x = ((e.clientX - rect.left) / rect.width) * 100;
                 const y = ((e.clientY - rect.top) / rect.height) * 100;
-                await this.guardarPosicion(equipoId, x, y);
-                location.reload();
+
+                // Soporta formato "eq:123", "est:5" o solo "123" (compatibilidad)
+                if (data.startsWith('est:')) {
+                    const estacionId = parseInt(data.substring(4));
+                    if (estacionId) {
+                        await this.guardarPosicionEstacion(estacionId, x, y);
+                        location.reload();
+                    }
+                } else if (data.startsWith('eq:')) {
+                    const equipoId = parseInt(data.substring(3));
+                    if (equipoId) {
+                        await this.guardarPosicion(equipoId, x, y);
+                        location.reload();
+                    }
+                } else {
+                    // Compatibilidad: solo número = equipo
+                    const equipoId = parseInt(data);
+                    if (equipoId) {
+                        await this.guardarPosicion(equipoId, x, y);
+                        location.reload();
+                    }
+                }
             });
         }
     }

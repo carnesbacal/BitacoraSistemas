@@ -70,13 +70,15 @@ function eliminar_planta(int $planta_id): void {
 function equipos_en_planta(int $planta_id): array {
     return db_all(
         "SELECT e.id, e.codigo_inventario, e.nombre, e.tipo, e.estado_vida,
-                e.pos_x, e.pos_y,
+                e.pos_x, e.pos_y, e.estacion_id,
                 a.nombre AS area_nombre, a.color AS area_color,
+                est.codigo AS estacion_codigo, est.nombre AS estacion_nombre,
                 (SELECT COUNT(*) FROM incidencias i
                  INNER JOIN estados es ON i.estado_id = es.id
                  WHERE i.equipo_id = e.id AND es.es_final = 0) AS incidencias_abiertas
          FROM equipos e
          LEFT JOIN areas a ON e.area_id = a.id
+         LEFT JOIN estaciones_trabajo est ON e.estacion_id = est.id
          WHERE e.planta_id = :pid AND e.activo = 1
          ORDER BY e.nombre ASC",
         ['pid' => $planta_id]
@@ -86,15 +88,88 @@ function equipos_en_planta(int $planta_id): array {
 function equipos_sin_planta_en_sucursal(int $sucursal_id): array {
     return db_all(
         "SELECT e.id, e.codigo_inventario, e.nombre, e.tipo, e.estado_vida,
+                e.estacion_id,
                 a.nombre AS area_nombre,
+                est.codigo AS estacion_codigo, est.nombre AS estacion_nombre,
                 (SELECT COUNT(*) FROM incidencias i
                  INNER JOIN estados es ON i.estado_id = es.id
                  WHERE i.equipo_id = e.id AND es.es_final = 0) AS incidencias_abiertas
          FROM equipos e
          LEFT JOIN areas a ON e.area_id = a.id
+         LEFT JOIN estaciones_trabajo est ON e.estacion_id = est.id
          WHERE e.sucursal_id = :sid AND e.activo = 1 AND e.planta_id IS NULL
          ORDER BY e.nombre ASC",
         ['sid' => $sucursal_id]
+    );
+}
+
+
+// ============================================================================
+// ESTACIONES POR PLANTA (agrupación visual)
+// ============================================================================
+
+/**
+ * Estaciones de trabajo ya posicionadas en un plano.
+ * Incluye conteo de equipos e incidencias abiertas.
+ */
+function estaciones_en_planta(int $planta_id): array {
+    return db_all(
+        "SELECT est.id, est.codigo, est.nombre, est.pos_x, est.pos_y,
+                a.nombre AS area_nombre, a.color AS area_color,
+                (SELECT COUNT(*) FROM equipos WHERE estacion_id = est.id AND activo = 1) AS num_equipos,
+                (SELECT COUNT(*) FROM incidencias i
+                 INNER JOIN estados es ON i.estado_id = es.id
+                 WHERE (i.estacion_id = est.id
+                        OR i.equipo_id IN (SELECT id FROM equipos WHERE estacion_id = est.id))
+                   AND es.es_final = 0) AS incidencias_abiertas
+         FROM estaciones_trabajo est
+         LEFT JOIN areas a ON est.area_id = a.id
+         WHERE est.planta_id = :pid AND est.activo = 1
+         ORDER BY est.nombre",
+        ['pid' => $planta_id]
+    );
+}
+
+
+/**
+ * Estaciones de la sucursal sin posicionar en ninguna planta.
+ */
+function estaciones_sin_planta_en_sucursal(int $sucursal_id): array {
+    return db_all(
+        "SELECT est.id, est.codigo, est.nombre,
+                a.nombre AS area_nombre, a.color AS area_color,
+                (SELECT COUNT(*) FROM equipos WHERE estacion_id = est.id AND activo = 1) AS num_equipos,
+                (SELECT COUNT(*) FROM incidencias i
+                 INNER JOIN estados es ON i.estado_id = es.id
+                 WHERE (i.estacion_id = est.id
+                        OR i.equipo_id IN (SELECT id FROM equipos WHERE estacion_id = est.id))
+                   AND es.es_final = 0) AS incidencias_abiertas
+         FROM estaciones_trabajo est
+         LEFT JOIN areas a ON est.area_id = a.id
+         WHERE est.sucursal_id = :sid AND est.activo = 1 AND est.planta_id IS NULL
+         ORDER BY est.nombre",
+        ['sid' => $sucursal_id]
+    );
+}
+
+
+/**
+ * Actualiza la posición de una estación en el mapa.
+ */
+function actualizar_posicion_estacion(int $estacion_id, ?int $planta_id, ?float $pos_x, ?float $pos_y): void {
+    if ($planta_id === null || $pos_x === null || $pos_y === null) {
+        db_exec(
+            "UPDATE estaciones_trabajo SET planta_id = NULL, pos_x = NULL, pos_y = NULL WHERE id = :id",
+            ['id' => $estacion_id]
+        );
+        return;
+    }
+    $pos_x = max(0, min(100, $pos_x));
+    $pos_y = max(0, min(100, $pos_y));
+
+    db_exec(
+        "UPDATE estaciones_trabajo SET planta_id = :pid, pos_x = :x, pos_y = :y WHERE id = :id",
+        ['pid' => $planta_id, 'x' => $pos_x, 'y' => $pos_y, 'id' => $estacion_id]
     );
 }
 
