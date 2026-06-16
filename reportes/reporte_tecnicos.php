@@ -8,6 +8,7 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../config/reportes_helpers.php';
+require_once __DIR__ . '/../config/incidencia_costos_helpers.php';
 
 $periodo = resolver_periodo();
 [$sucursal_filtro, $sucursales_lista, $where_sucursal, $params_sucursal] = resolver_filtro_sucursal();
@@ -26,7 +27,10 @@ $tecnicos = db_all(
             AVG(CASE WHEN i.tiempo_resolucion_min IS NOT NULL THEN i.tiempo_resolucion_min END) avg_resolucion,
             SUM(CASE WHEN i.sla_cumplido = 1 THEN 1 ELSE 0 END) sla_cumplido,
             SUM(CASE WHEN i.sla_cumplido = 0 THEN 1 ELSE 0 END) sla_incumplido,
-            COUNT(DISTINCT CASE WHEN i.es_reincidencia = 1 THEN i.id END) reincidencias_manejadas
+            COUNT(DISTINCT CASE WHEN i.es_reincidencia = 1 THEN i.id END) reincidencias_manejadas,
+            u.tarifa_hora,
+            COALESCE(SUM(i.horas_trabajadas), 0) total_horas,
+            COALESCE(SUM(i.horas_trabajadas * i.tarifa_hora_aplicada), 0) costo_mano_obra
      FROM usuarios u
      INNER JOIN roles r ON u.rol_id = r.id
      LEFT JOIN incidencias i ON i.asignado_a_id = u.id
@@ -34,7 +38,7 @@ $tecnicos = db_all(
      LEFT JOIN estados est ON i.estado_id = est.id
      LEFT JOIN severidades sev ON i.severidad_id = sev.id
      WHERE r.puede_resolver = 1 AND u.activo = 1
-     GROUP BY u.id, u.nombre_completo, u.usuario, u.email, r.nombre
+     GROUP BY u.id, u.nombre_completo, u.usuario, u.email, r.nombre, u.tarifa_hora
      ORDER BY total_asignadas DESC, u.nombre_completo ASC",
     array_merge(['d' => $periodo['desde'], 'h' => $periodo['hasta']], $params_sucursal)
 );
@@ -49,16 +53,25 @@ foreach ($tecnicos as &$t) {
 }
 unset($t);
 
+// Solo admin ve costos de mano de obra (salarios)
+$ver_costos = puede_ver_mano_obra_interna();
+
 if ($es_exportacion) {
     csv_iniciar('productividad_tecnicos_' . date('Ymd_His') . '.csv');
     csv_fila(['PRODUCTIVIDAD POR TÉCNICO']);
     csv_fila(['Período:', $periodo['etiqueta']]);
     csv_fila(['']);
-    csv_fila(['Técnico', 'Rol', 'Total asignadas', 'Resueltas', 'Abiertas', '% Cierre',
-              'Críticas atendidas', 'T. respuesta prom.', 'T. resolución prom.',
-              'SLA cumplido', 'SLA incumplido', '% SLA']);
+    $cols = ['Técnico', 'Rol', 'Total asignadas', 'Resueltas', 'Abiertas', '% Cierre',
+             'Críticas atendidas', 'T. respuesta prom.', 'T. resolución prom.',
+             'SLA cumplido', 'SLA incumplido', '% SLA'];
+    if ($ver_costos) {
+        $cols[] = 'Horas trabajadas';
+        $cols[] = 'Tarifa/hora';
+        $cols[] = 'Costo mano de obra';
+    }
+    csv_fila($cols);
     foreach ($tecnicos as $t) {
-        csv_fila([
+        $fila = [
             $t['nombre_completo'], $t['rol_nombre'],
             $t['total_asignadas'], $t['resueltas'], $t['abiertas'], $t['pct_resolucion'] . '%',
             $t['criticas_atendidas'],
@@ -66,7 +79,13 @@ if ($es_exportacion) {
             $t['avg_resolucion'] !== null ? fmt_duracion((int) $t['avg_resolucion']) : '—',
             $t['sla_cumplido'], $t['sla_incumplido'],
             $t['sla_pct'] !== null ? $t['sla_pct'] . '%' : '—',
-        ]);
+        ];
+        if ($ver_costos) {
+            $fila[] = number_format((float) $t['total_horas'], 2);
+            $fila[] = $t['tarifa_hora'] !== null ? number_format((float) $t['tarifa_hora'], 2) : '';
+            $fila[] = number_format((float) $t['costo_mano_obra'], 2);
+        }
+        csv_fila($fila);
     }
     exit;
 }
@@ -203,6 +222,34 @@ require_once __DIR__ . '/../config/header.php';
                     </dd>
                 </div>
             </dl>
+
+            <?php if ($ver_costos): ?>
+            <!-- Costo de mano de obra (solo admin) -->
+            <div class="mt-4 pt-4 border-t border-zinc-100">
+                <div class="flex items-center gap-1.5 mb-2">
+                    <i data-lucide="hand-coins" class="w-3.5 h-3.5 text-bacal-700"></i>
+                    <span class="text-[10px] font-bold text-bacal-700 uppercase tracking-wider">Costo mano de obra</span>
+                    <span class="text-[9px] text-zinc-400 bg-zinc-100 px-1.5 rounded">confidencial</span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                        <div class="font-display text-base font-extrabold text-zinc-900"><?= e(rtrim(rtrim(number_format((float) $t['total_horas'], 2), '0'), '.')) ?></div>
+                        <div class="text-[9px] text-zinc-500 uppercase tracking-wider">Horas</div>
+                    </div>
+                    <div>
+                        <div class="font-display text-base font-extrabold text-zinc-900"><?= $t['tarifa_hora'] !== null ? e(fmt_dinero_corto((float) $t['tarifa_hora'])) : '—' ?></div>
+                        <div class="text-[9px] text-zinc-500 uppercase tracking-wider">Tarifa/h</div>
+                    </div>
+                    <div>
+                        <div class="font-display text-base font-extrabold text-bacal-700"><?= e(fmt_dinero_corto((float) $t['costo_mano_obra'])) ?></div>
+                        <div class="text-[9px] text-zinc-500 uppercase tracking-wider">Costo</div>
+                    </div>
+                </div>
+                <?php if ($t['tarifa_hora'] === null && (float) $t['total_horas'] > 0): ?>
+                <p class="text-[9px] text-amber-600 mt-1.5 text-center">⚠ Sin tarifa configurada. Asígnala en Usuarios.</p>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
 
             <a href="<?= url('bitacora.php?asignado_a=' . $t['id']) ?>"
                class="mt-4 block text-center text-xs font-semibold text-bacal-700 hover:text-bacal-800 hover:underline">

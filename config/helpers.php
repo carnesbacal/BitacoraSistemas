@@ -221,6 +221,21 @@ function color_avatar(?string $texto): string {
  * @param string $clases_extra Clases extra para el contenedor
  * @return string HTML del avatar
  */
+/**
+ * Devuelve el valor de una preferencia de UI del usuario actual.
+ */
+function usuario_preferencia(string $clave, mixed $defecto = null): mixed {
+    $prefs = usuario_actual()['preferencias'] ?? [];
+    return $prefs[$clave] ?? $defecto;
+}
+
+/**
+ * ¿El usuario prefiere el selector de sucursal en modo radio (junto al título)?
+ */
+function usuario_prefiere_radio_sucursal(): bool {
+    return usuario_preferencia('sucursal_selector') === 'radio';
+}
+
 function render_avatar(?array $usuario, string $tamano = 'w-8 h-8', string $clases_extra = ''): string {
     if (!$usuario) {
         return '<div class="' . $tamano . ' rounded-full bg-zinc-200 ' . $clases_extra . '"></div>';

@@ -66,7 +66,7 @@ if (es_post()) {
                         display: ['"Bricolage Grotesque"', 'system-ui', 'sans-serif'],
                     },
                     colors: {
-                        bacal: { 50:'#FEF2F2',100:'#FEE2E2',600:'#DC2626',700:'#C8102E',800:'#991B1B',900:'#7F1D1D' },
+                        bacal: { 50:'#F6F7F8',100:'#ECEFF1',200:'#D5DADE',600:'#3F464D',700:'#2B2F33',800:'#1F2327',900:'#111418' },
                         gold:  { 400:'#F2C94C', 500:'#E8B923', 600:'#D4A017' }
                     }
                 }
@@ -82,7 +82,7 @@ if (es_post()) {
             background:
                 radial-gradient(circle at 20% 20%, rgba(232,185,35,0.20) 0%, transparent 40%),
                 radial-gradient(circle at 80% 80%, rgba(255,255,255,0.10) 0%, transparent 50%),
-                linear-gradient(135deg, #7F1D1D 0%, #C8102E 50%, #991B1B 100%);
+                linear-gradient(135deg, #111418 0%, #2B2F33 50%, #1F2327 100%);
         }
 
         /* Patrón sutil de textura */
@@ -111,18 +111,18 @@ if (es_post()) {
             transition: all 0.15s ease;
         }
         .input-form:focus {
-            border-color: #C8102E;
-            box-shadow: 0 0 0 3px rgba(200,16,46,0.10);
+            border-color: #2B2F33;
+            box-shadow: 0 0 0 3px rgba(43,47,51,0.10);
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, #C8102E 0%, #991B1B 100%);
+            background: linear-gradient(135deg, #2B2F33 0%, #1F2327 100%);
             transition: all 0.2s ease;
         }
         .btn-primary:hover {
-            background: linear-gradient(135deg, #991B1B 0%, #7F1D1D 100%);
+            background: linear-gradient(135deg, #1F2327 0%, #111418 100%);
             transform: translateY(-1px);
-            box-shadow: 0 8px 20px -8px rgba(200,16,46,0.6);
+            box-shadow: 0 8px 20px -8px rgba(43,47,51,0.6);
         }
         .btn-primary:active { transform: translateY(0); }
 
@@ -208,7 +208,7 @@ if (es_post()) {
 
             <!-- Mensaje de error -->
             <?php if ($error): ?>
-            <div class="mb-5 px-4 py-3 rounded-lg bg-bacal-50 border border-bacal-200 text-bacal-800 text-sm flex items-start gap-2.5 shake">
+            <div class="mb-5 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-sm flex items-start gap-2.5 shake">
                 <i data-lucide="alert-circle" class="w-5 h-5 flex-shrink-0 mt-0.5"></i>
                 <div><?= e($error) ?></div>
             </div>
@@ -265,3 +265,4 @@ if (es_post()) {
 <script>lucide.createIcons();</script>
 </body>
 </html>
+

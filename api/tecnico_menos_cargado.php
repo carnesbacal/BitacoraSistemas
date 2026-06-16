@@ -9,10 +9,11 @@
  */
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/auth.php';
+require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../config/inteligencia_helpers.php';
 
-requerir_login();
 header('Content-Type: application/json; charset=utf-8');
+requerir_login();
 
 $sucursal_id = (int) input('sucursal_id', 0) ?: null;
 

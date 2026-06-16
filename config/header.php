@@ -84,6 +84,7 @@ try {
                     },
                     colors: {
                         bacal: {
+                        /*
                             50:  '#FEF2F2',
                             100: '#FEE2E2',
                             200: '#FECACA',
@@ -94,6 +95,19 @@ try {
                             700: '#C8102E',  // rojo corporativo
                             800: '#991B1B',
                             900: '#7F1D1D',
+                            */
+
+                            50:  '#F4F5F6',
+                            100: '#E8E9EB',
+                            200: '#D1D3D8',
+                            300: '#B0B5BC',
+                            400: '#8E959F',
+                            500: '#6B7380',
+                            600: '#545D68',
+                            700: '#36454F',   // Gris Antracita principal
+                            800: '#2C3538',
+                            900: '#1B1F24',
+
                         },
                         gold: {
                             400: '#F2C94C',
@@ -170,11 +184,11 @@ try {
             color: #71717a !important;
         }
         html.dark input:focus, html.dark textarea:focus, html.dark select:focus {
-            border-color: #C8102E !important;
+            border-color: #36454F !important;
         }
 
         /* Backgrounds de colores tenues (50) → variantes oscuras tenues */
-        html.dark .bg-bacal-50 { background-color: rgba(200, 16, 46, 0.1) !important; }
+        html.dark .bg-bacal-50 { background-color: rgba(54, 69, 79, 0.1) !important; }
         html.dark .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.1) !important; }
         html.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.1) !important; }
         html.dark .bg-amber-50 { background-color: rgba(217, 119, 6, 0.1) !important; }
@@ -183,10 +197,10 @@ try {
         html.dark .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.15) !important; }
         html.dark .bg-amber-100 { background-color: rgba(217, 119, 6, 0.15) !important; }
         html.dark .bg-purple-100 { background-color: rgba(147, 51, 234, 0.15) !important; }
-        html.dark .bg-bacal-100 { background-color: rgba(200, 16, 46, 0.15) !important; }
+        html.dark .bg-bacal-100 { background-color: rgba(54, 69, 79, 0.15) !important; }
 
         /* Bordes tenues */
-        html.dark .border-bacal-200 { border-color: rgba(200, 16, 46, 0.3) !important; }
+        html.dark .border-bacal-200 { border-color: rgba(54, 69, 79, 0.3) !important; }
         html.dark .border-emerald-200 { border-color: rgba(16, 185, 129, 0.3) !important; }
         html.dark .border-blue-200 { border-color: rgba(59, 130, 246, 0.3) !important; }
         html.dark .border-amber-200 { border-color: rgba(217, 119, 6, 0.3) !important; }
@@ -218,11 +232,11 @@ try {
 
         /* Item activo del sidebar */
         .nav-item-active {
-            background: linear-gradient(90deg, rgba(200,16,46,0.08) 0%, rgba(200,16,46,0.02) 100%);
-            color: #C8102E;
-            border-left: 3px solid #C8102E;
+            background: linear-gradient(90deg, rgba(54,69,79,0.08) 0%, rgba(54,69,79,0.02) 100%);
+            color: #36454F;
+            border-left: 3px solid #36454F;
         }
-        .nav-item-active svg { color: #C8102E; }
+        .nav-item-active svg { color: #36454F; }
 
         /* Transición sutil al hover */
         .nav-item {
@@ -403,7 +417,7 @@ try {
                            @mouseenter="indiceSeleccionado = indicePlano(idxG, idxI)"
                            :class="indicePlano(idxG, idxI) === indiceSeleccionado ? 'bg-bacal-50' : 'hover:bg-zinc-50'"
                            class="flex items-center gap-3 px-4 py-2.5 text-sm border-l-2 border-transparent"
-                           :style="indicePlano(idxG, idxI) === indiceSeleccionado ? 'border-left-color: #C8102E' : ''">
+                           :style="indicePlano(idxG, idxI) === indiceSeleccionado ? 'border-left-color: #36454F' : ''">
                             <i :data-lucide="item.icono" class="w-4 h-4 text-zinc-400 flex-shrink-0"></i>
                             <div class="flex-1 min-w-0">
                                 <div class="font-semibold text-zinc-900 truncate" x-text="item.titulo"></div>
@@ -995,7 +1009,7 @@ function busquedaGlobal() {
                             <div class="font-semibold text-sm text-zinc-900"><?= e($u['nombre']) ?></div>
                             <div class="text-xs text-zinc-500 mt-0.5"><?= e($u['email'] ?? '') ?></div>
                             <div class="mt-2">
-                                <?= badge($u['rol_nombre'], '#C8102E') ?>
+                                <?= badge($u['rol_nombre'], '#36454F') ?>
                             </div>
                         </div>
 

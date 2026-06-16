@@ -11,6 +11,7 @@ require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/auth.php';
 require_once __DIR__ . '/../config/helpers.php';
 require_once __DIR__ . '/../config/incidencias_helpers.php';
+require_once __DIR__ . '/../config/incidencia_costos_helpers.php';
 
 requerir_login();
 
@@ -25,6 +26,13 @@ if (!$i || !puede_ver_incidencia($i)) {
 $adjuntos    = cargar_adjuntos($id);
 $comentarios = cargar_comentarios($id);
 $historial   = cargar_historial($id);
+
+$costos = costo_incidencia($id);
+$proveedor_nombre_pdf = null;
+if (!empty($i['proveedor_escalado_id'])) {
+    $prov_pdf = db_one("SELECT nombre FROM proveedores WHERE id = :id", ['id' => (int) $i['proveedor_escalado_id']]);
+    $proveedor_nombre_pdf = $prov_pdf['nombre'] ?? null;
+}
 
 // Registrar la generación del PDF en auditoría
 registrar_auditoria('exportar_incidencia_pdf', 'incidencias', $id, "Exportó {$i['folio']} a PDF");
@@ -225,6 +233,64 @@ registrar_auditoria('exportar_incidencia_pdf', 'incidencias', $id, "Exportó {$i
     <div class="mb-6 bg-amber-50 border-l-4 border-amber-400 p-4">
         <h3 class="font-display text-sm font-bold text-amber-800 uppercase tracking-wide mb-2">Recomendaciones para evitar recurrencia</h3>
         <p class="text-sm text-amber-900 leading-relaxed whitespace-pre-wrap"><?= e($i['recomendaciones']) ?></p>
+    </div>
+    <?php endif; ?>
+
+    <!-- Costos -->
+    <?php
+    $ver_moi = puede_ver_mano_obra_interna();
+    $mostrar_costos = $ver_moi ? $costos['tiene_costo'] : $costos['tiene_costo_visible'];
+    $hay_prov = $proveedor_nombre_pdf || !empty($i['proveedor_externo_info']);
+    ?>
+    <?php if ($mostrar_costos || $hay_prov): ?>
+    <div class="mb-6">
+        <h3 class="font-display text-sm font-bold text-zinc-700 uppercase tracking-wide mb-2 border-b border-zinc-200 pb-1">Costos</h3>
+        <?php if ($hay_prov): ?>
+        <p class="text-sm text-zinc-600 mb-2">Atendió: <strong><?= e($proveedor_nombre_pdf ?: $i['proveedor_externo_info']) ?></strong></p>
+        <?php endif; ?>
+        <?php $total_pdf = $ver_moi ? $costos['total'] : $costos['total_visible']; ?>
+        <table class="w-full text-sm border border-zinc-200">
+            <tbody>
+                <?php if ($costos['mano_obra'] > 0): ?>
+                <tr class="border-b border-zinc-100">
+                    <td class="px-3 py-1.5 text-zinc-600">Mano de obra proveedor</td>
+                    <td class="px-3 py-1.5 text-right font-medium text-zinc-900"><?= e(fmt_dinero($costos['mano_obra'])) ?></td>
+                </tr>
+                <?php endif; ?>
+                <?php if ($costos['materiales_proveedor'] > 0): ?>
+                <tr class="border-b border-zinc-100">
+                    <td class="px-3 py-1.5 text-zinc-600">Materiales del proveedor</td>
+                    <td class="px-3 py-1.5 text-right font-medium text-zinc-900"><?= e(fmt_dinero($costos['materiales_proveedor'])) ?></td>
+                </tr>
+                <?php endif; ?>
+                <?php if ($costos['materiales_comprados'] > 0): ?>
+                <tr class="border-b border-zinc-100">
+                    <td class="px-3 py-1.5 text-zinc-600">Materiales comprados</td>
+                    <td class="px-3 py-1.5 text-right font-medium text-zinc-900"><?= e(fmt_dinero($costos['materiales_comprados'])) ?></td>
+                </tr>
+                <?php endif; ?>
+                <?php if ($ver_moi && $costos['mano_obra_interna'] > 0): ?>
+                <tr class="border-b border-zinc-100">
+                    <td class="px-3 py-1.5 text-zinc-600">Mano de obra interna
+                        <?php if ($costos['horas_trabajadas'] > 0): ?>
+                        <span class="text-[10px] text-zinc-400">(<?= e(rtrim(rtrim(number_format($costos['horas_trabajadas'], 2), '0'), '.')) ?> h × <?= e(fmt_dinero($costos['tarifa_aplicada'])) ?>/h)</span>
+                        <?php endif; ?>
+                    </td>
+                    <td class="px-3 py-1.5 text-right font-medium text-zinc-900"><?= e(fmt_dinero($costos['mano_obra_interna'])) ?></td>
+                </tr>
+                <?php endif; ?>
+                <tr class="bg-zinc-50">
+                    <td class="px-3 py-2 font-bold text-zinc-900 uppercase text-xs tracking-wide">Total</td>
+                    <td class="px-3 py-2 text-right font-display font-extrabold text-base text-zinc-900"><?= e(fmt_dinero($total_pdf)) ?></td>
+                </tr>
+            </tbody>
+        </table>
+        <?php if ($costos['horas_trabajadas'] > 0): ?>
+        <p class="text-xs text-zinc-500 mt-1.5">Tiempo activo: <strong><?= e(rtrim(rtrim(number_format($costos['horas_trabajadas'], 2), '0'), '.')) ?> h</strong></p>
+        <?php endif; ?>
+        <?php if (!empty($i['costo_notas'])): ?>
+        <p class="text-xs text-zinc-500 mt-1.5 italic"><?= e($i['costo_notas']) ?></p>
+        <?php endif; ?>
     </div>
     <?php endif; ?>
 

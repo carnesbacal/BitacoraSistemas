@@ -1,0 +1,4 @@
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/carnesbacalcom/public_html/intranet.carnesbacal.com.mx/BitacoraSistemas/
+    - /bin/cp -R * $DEPLOYPATH

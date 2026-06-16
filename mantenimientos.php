@@ -79,7 +79,8 @@ if ($vista === 'calendario') {
     $mantenimientos = db_all(
         "SELECT m.*, e.codigo_inventario equipo_codigo, e.nombre equipo_nombre,
                 s.nombre sucursal_nombre, u.nombre_completo asignado_nombre,
-                p.nombre proveedor_nombre
+                p.nombre proveedor_nombre,
+                (SELECT COUNT(*) FROM mantenimiento_equipos me WHERE me.mantenimiento_id = m.id) AS num_equipos
          FROM mantenimientos m
          INNER JOIN equipos e ON m.equipo_id = e.id
          INNER JOIN sucursales s ON e.sucursal_id = s.id
@@ -102,7 +103,8 @@ if ($vista === 'calendario') {
     $mantenimientos = db_all(
         "SELECT m.*, e.codigo_inventario equipo_codigo, e.nombre equipo_nombre,
                 s.nombre sucursal_nombre, u.nombre_completo asignado_nombre,
-                p.nombre proveedor_nombre
+                p.nombre proveedor_nombre,
+                (SELECT COUNT(*) FROM mantenimiento_equipos me WHERE me.mantenimiento_id = m.id) AS num_equipos
          FROM mantenimientos m
          INNER JOIN equipos e ON m.equipo_id = e.id
          INNER JOIN sucursales s ON e.sucursal_id = s.id
@@ -287,9 +289,23 @@ require_once __DIR__ . '/config/header.php';
                             <?= badge_estado_mant($m['estado']) ?>
                         </td>
                         <td class="px-4 py-2.5">
-                            <a href="<?= url('equipo_ver.php?id=' . $m['equipo_id']) ?>" onclick="event.stopPropagation()"
-                               class="font-mono text-xs font-bold text-zinc-700 hover:text-bacal-700"><?= e($m['equipo_codigo']) ?></a>
-                            <div class="text-[11px] text-zinc-500 truncate"><?= e($m['equipo_nombre']) ?></div>
+                            <div class="flex items-center gap-1.5">
+                                <a href="<?= url('equipo_ver.php?id=' . $m['equipo_id']) ?>" onclick="event.stopPropagation()"
+                                   class="font-mono text-xs font-bold text-zinc-700 hover:text-bacal-700"><?= e($m['equipo_codigo']) ?></a>
+                                <?php if ((int) ($m['num_equipos'] ?? 1) > 1): ?>
+                                <span class="inline-flex items-center gap-0.5 text-[10px] font-bold text-bacal-700 bg-bacal-50 border border-bacal-200 px-1.5 py-0.5 rounded"
+                                      title="<?= (int) $m['num_equipos'] ?> equipos en este mantenimiento">
+                                    +<?= (int) $m['num_equipos'] - 1 ?>
+                                </span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="text-[11px] text-zinc-500 truncate">
+                                <?php if ((int) ($m['num_equipos'] ?? 1) > 1): ?>
+                                <?= (int) $m['num_equipos'] ?> equipos
+                                <?php else: ?>
+                                <?= e($m['equipo_nombre']) ?>
+                                <?php endif; ?>
+                            </div>
                         </td>
                         <td class="px-4 py-2.5">
                             <div class="font-semibold text-sm text-zinc-900"><?= e($m['titulo']) ?></div>
@@ -381,8 +397,8 @@ require_once __DIR__ . '/config/header.php';
                 <a href="<?= url('mantenimiento_ver.php?id=' . $ev['id']) ?>"
                    class="block text-[10px] truncate px-1 py-0.5 rounded mb-0.5 hover:opacity-80 transition-opacity"
                    style="background-color: <?= e($cfg['color']) ?>15; color: <?= e($cfg['color']) ?>; border-left: 2px solid <?= e($cfg['color']) ?>"
-                   title="<?= e($ev['titulo']) ?> · <?= e($ev['equipo_codigo']) ?>">
-                    <span class="font-mono font-bold"><?= e($ev['equipo_codigo']) ?></span>
+                   title="<?= e($ev['titulo']) ?> · <?= e($ev['equipo_codigo']) ?><?= (int) ($ev['num_equipos'] ?? 1) > 1 ? ' (+' . ((int) $ev['num_equipos'] - 1) . ')' : '' ?>">
+                    <span class="font-mono font-bold"><?= e($ev['equipo_codigo']) ?></span><?php if ((int) ($ev['num_equipos'] ?? 1) > 1): ?><span class="font-bold">+<?= (int) $ev['num_equipos'] - 1 ?></span><?php endif; ?>
                     <span class="opacity-75 truncate"><?= e($ev['titulo']) ?></span>
                 </a>
                 <?php endforeach; ?>

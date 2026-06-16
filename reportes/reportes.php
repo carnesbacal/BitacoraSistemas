@@ -57,6 +57,18 @@ $reportes = [
         'tags' => ['Exportar', 'Excel'],
     ],
 ];
+
+// Análisis de costos: solo administradores (incluye mano de obra interna confidencial)
+if (tiene_permiso('administrar')) {
+    array_splice($reportes, 3, 0, [[
+        'titulo' => 'Análisis de costos',
+        'descripcion' => 'Gasto en proveedores, materiales y mano de obra interna. Tendencia, incidencias más caras, proveedores y costos por sucursal.',
+        'icono' => 'hand-coins',
+        'color' => '#36454F',
+        'url' => url('reportes/reporte_costos.php'),
+        'tags' => ['Costos', 'Presupuesto', 'Confidencial'],
+    ]]);
+}
 ?>
 
 <div class="animate-fade-in">

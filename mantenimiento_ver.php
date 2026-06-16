@@ -179,6 +179,10 @@ $m = db_one(
     ['id' => $id]
 );
 
+// Todos los equipos cubiertos por este mantenimiento (tabla puente)
+$equipos_m = mantenimiento_equipos($id);
+$num_equipos = count($equipos_m);
+
 $cfg_estado = MANTENIMIENTO_ESTADOS[$m['estado']] ?? MANTENIMIENTO_ESTADOS['programado'];
 
 $titulo_pagina = $m['titulo'];
@@ -226,6 +230,7 @@ require_once __DIR__ . '/config/header.php';
                 </div>
                 <h1 class="font-display text-2xl font-extrabold text-zinc-900 leading-tight"><?= e($m['titulo']) ?></h1>
 
+                <?php if ($num_equipos <= 1): ?>
                 <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-600 mt-3">
                     <a href="<?= url('equipo_ver.php?id=' . $m['equipo_id']) ?>" class="flex items-center gap-1 hover:text-bacal-700">
                         <i data-lucide="monitor" class="w-3.5 h-3.5"></i>
@@ -237,6 +242,23 @@ require_once __DIR__ . '/config/header.php';
                         <?= e($m['sucursal_nombre']) ?>
                     </span>
                 </div>
+                <?php else: ?>
+                <div class="text-xs text-zinc-600 mt-3">
+                    <div class="flex items-center gap-1 text-[10px] font-bold text-zinc-500 uppercase tracking-wide mb-1.5">
+                        <i data-lucide="layers" class="w-3.5 h-3.5"></i> <?= $num_equipos ?> equipos
+                    </div>
+                    <div class="flex flex-wrap gap-1.5">
+                        <?php foreach ($equipos_m as $eq): ?>
+                        <a href="<?= url('equipo_ver.php?id=' . $eq['id']) ?>"
+                           class="inline-flex items-center gap-1 bg-zinc-50 border border-zinc-200 rounded px-2 py-0.5 hover:border-bacal-300 hover:text-bacal-700"
+                           title="<?= e($eq['nombre']) ?> · <?= e($eq['sucursal_nombre']) ?>">
+                            <span class="font-mono font-bold"><?= e($eq['codigo_inventario']) ?></span>
+                            <span class="text-zinc-500 truncate max-w-[160px]"><?= e($eq['nombre']) ?></span>
+                        </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
             </div>
         </div>
 

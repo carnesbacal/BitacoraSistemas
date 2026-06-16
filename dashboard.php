@@ -17,6 +17,7 @@ require_once __DIR__ . '/config/header.php';
 require_once __DIR__ . '/config/mantenimientos_helpers.php';
 require_once __DIR__ . '/config/inteligencia_helpers.php';
 require_once __DIR__ . '/config/comunicacion_helpers.php';
+require_once __DIR__ . '/config/incidencia_costos_helpers.php';
 
 $u = usuario_actual();
 
@@ -45,6 +46,15 @@ if ($sucursal_filtro) {
 }
 
 $sucursales = db_all("SELECT id, nombre, codigo FROM sucursales WHERE activo = 1 ORDER BY nombre");
+
+// Resumen de costos del mes (solo admin: incluye mano de obra interna)
+$puede_ver_costos = tiene_permiso('administrar');
+$costos_mes = null;
+if ($puede_ver_costos) {
+    $where_costos = $sucursal_filtro ? ' AND i.sucursal_id = :sid ' : '';
+    $params_costos = $sucursal_filtro ? ['sid' => $sucursal_filtro] : [];
+    $costos_mes = costos_resumen_periodo(date('Y-m-01'), date('Y-m-d'), $where_costos, $params_costos);
+}
 
 // ----------------------------------------------------------------------------
 // KPIs
@@ -310,16 +320,34 @@ $mes_actual_es = $meses_es[(int) date('n') - 1] . ' ' . date('Y');
     <!-- Encabezado: saludo + filtro de sucursal -->
     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-            <h2 class="font-display text-3xl font-extrabold text-zinc-900 leading-tight">
-                <?= $saludo ?>, <?= e(explode(' ', $u['nombre'])[0]) ?>
-            </h2>
+            <div class="flex items-center gap-3 flex-wrap">
+                <h2 class="font-display text-3xl font-extrabold text-zinc-900 leading-tight">
+                    <?= $saludo ?>, <?= e(explode(' ', $u['nombre'])[0]) ?>
+                </h2>
+                <?php if (tiene_permiso('ver_todas_sucursales') && count($sucursales) > 1 && usuario_prefiere_radio_sucursal()): ?>
+                <form method="GET" class="flex items-center gap-2 flex-wrap">
+                    <label class="flex items-center gap-1.5 cursor-pointer text-sm font-medium text-zinc-600">
+                        <input type="radio" name="sucursal" value="" onchange="this.form.submit()"
+                               <?= !$sucursal_filtro ? 'checked' : '' ?>>
+                        Todas
+                    </label>
+                    <?php foreach ($sucursales as $s): ?>
+                    <label class="flex items-center gap-1.5 cursor-pointer text-sm font-medium text-zinc-600">
+                        <input type="radio" name="sucursal" value="<?= $s['id'] ?>" onchange="this.form.submit()"
+                               <?= $sucursal_filtro == $s['id'] ? 'checked' : '' ?>>
+                        <?= e($s['nombre']) ?>
+                    </label>
+                    <?php endforeach; ?>
+                </form>
+                <?php endif; ?>
+            </div>
             <p class="text-sm text-zinc-500 mt-1">
                 Resumen del mes en curso ·
                 <span class="font-medium text-zinc-700"><?= e($mes_actual_es) ?></span>
             </p>
         </div>
 
-        <?php if ($ver_todas): ?>
+        <?php if ($ver_todas && !usuario_prefiere_radio_sucursal()): ?>
         <form method="GET" class="flex items-center gap-2">
             <div class="relative">
                 <i data-lucide="store" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"></i>
@@ -474,6 +502,40 @@ $mes_actual_es = $meses_es[(int) date('n') - 1] . ' ' . date('Y');
             <div class="text-[11px] text-zinc-500 mt-2 uppercase tracking-wider font-bold">SLA cumplido</div>
         </div>
     </div>
+
+    <!-- Widget: Costos del mes (solo ver_reportes / admin) -->
+    <?php if ($puede_ver_costos && $costos_mes && $costos_mes['total'] > 0): ?>
+    <?php $ver_moi_dash = puede_ver_mano_obra_interna();
+          $total_dash = $ver_moi_dash ? $costos_mes['total'] : $costos_mes['total_visible']; ?>
+    <div class="bg-white rounded-xl border border-zinc-200 shadow-sm p-5">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="font-display text-base font-bold text-zinc-900 flex items-center gap-2">
+                <i data-lucide="hand-coins" class="w-4 h-4 text-bacal-700"></i> Costos del mes
+            </h3>
+            <a href="<?= url('reportes/reporte_costos.php') ?>" class="text-xs font-semibold text-bacal-700 hover:underline flex items-center gap-1">
+                Ver análisis <i data-lucide="arrow-right" class="w-3 h-3"></i>
+            </a>
+        </div>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+                <div class="font-display text-2xl font-extrabold text-bacal-700"><?= e(fmt_dinero_corto($total_dash)) ?></div>
+                <div class="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Gasto total</div>
+            </div>
+            <div>
+                <div class="font-display text-2xl font-extrabold text-zinc-900"><?= e(fmt_dinero_corto($costos_mes['externo'])) ?></div>
+                <div class="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Proveedores</div>
+            </div>
+            <div>
+                <div class="font-display text-2xl font-extrabold text-zinc-900"><?= $costos_mes['con_costo'] ?></div>
+                <div class="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Con costo</div>
+            </div>
+            <div>
+                <div class="font-display text-2xl font-extrabold text-zinc-900"><?= e(fmt_dinero_corto($costos_mes['promedio'])) ?></div>
+                <div class="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Promedio</div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <!-- Mi trabajo pendiente -->
     <?php if (tiene_permiso('resolver')): ?>

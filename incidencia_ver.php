@@ -18,6 +18,7 @@ require_once __DIR__ . '/config/helpers.php';
 require_once __DIR__ . '/config/incidencias_helpers.php';
 require_once __DIR__ . '/config/notificaciones_helpers.php';
 require_once __DIR__ . '/config/comunicacion_helpers.php';
+require_once __DIR__ . '/config/incidencia_costos_helpers.php';
 
 requerir_login();
 
@@ -51,6 +52,15 @@ if (!puede_ver_incidencia($incidencia)) {
 }
 
 $puede_editar = puede_editar_incidencia($incidencia);
+
+// Costos de la incidencia
+$costos = costo_incidencia($id);
+$proveedor_nombre = null;
+if (!empty($incidencia['proveedor_escalado_id'])) {
+    $prov_row = db_one("SELECT nombre, telefono FROM proveedores WHERE id = :id", ['id' => (int) $incidencia['proveedor_escalado_id']]);
+    $proveedor_nombre = $prov_row['nombre'] ?? null;
+    $proveedor_telefono = $prov_row['telefono'] ?? null;
+}
 
 // ----------------------------------------------------------------------------
 // Procesar acciones POST (acciones rápidas)
@@ -265,6 +275,20 @@ $relacionadas = cargar_incidencias_relacionadas($id, $incidencia['incidencia_pad
 
 $estados_disponibles = cat_estados();
 $tecnicos_disponibles = cat_tecnicos();
+
+// Formato amigable de horas de trabajo (decimal -> "X h Y min")
+if (!function_exists('fmt_horas_min')) {
+    function fmt_horas_min($horas_decimal): string {
+        $horas_decimal = (float) $horas_decimal;
+        if ($horas_decimal <= 0) return '—';
+        $total_min = (int) round($horas_decimal * 60);
+        $h = intdiv($total_min, 60);
+        $m = $total_min % 60;
+        if ($h > 0 && $m > 0) return "{$h} h {$m} min";
+        if ($h > 0)           return "{$h} h";
+        return "{$m} min";
+    }
+}
 
 // SLA actual
 function calcular_sla_estado(array $i): array {
@@ -796,6 +820,111 @@ require_once __DIR__ . '/config/header.php';
         <!-- SIDEBAR DERECHO -->
         <!-- ============================================== -->
         <div class="space-y-4">
+
+            <!-- Costos -->
+            <?php
+            $ver_moi = puede_ver_mano_obra_interna();
+            $mostrar_costos = $ver_moi ? $costos['tiene_costo'] : $costos['tiene_costo_visible'];
+            $hay_proveedor = $proveedor_nombre || !empty($incidencia['proveedor_externo_info']);
+            ?>
+            <?php if ($mostrar_costos || $hay_proveedor): ?>
+            <div class="bg-white rounded-xl border border-zinc-200 shadow-sm p-5">
+                <h3 class="text-xs font-bold text-zinc-600 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <i data-lucide="hand-coins" class="w-3.5 h-3.5 text-bacal-700"></i> Costos
+                </h3>
+
+                <?php if ($hay_proveedor): ?>
+                <div class="flex items-center gap-2 mb-3 pb-3 border-b border-zinc-100">
+                    <div class="w-8 h-8 rounded-lg bg-bacal-50 flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="truck" class="w-4 h-4 text-bacal-700"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="text-sm font-semibold text-zinc-900 truncate">
+                            <?= e($proveedor_nombre ?: $incidencia['proveedor_externo_info']) ?>
+                        </div>
+                        <?php if ($proveedor_nombre && !empty($proveedor_telefono)): ?>
+                        <div class="text-[10px] text-zinc-500"><?= e($proveedor_telefono) ?></div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php
+                $total_mostrar = $ver_moi ? $costos['total'] : $costos['total_visible'];
+                ?>
+                <dl class="space-y-1.5 text-xs">
+                    <?php if ($costos['mano_obra'] > 0): ?>
+                    <div class="flex justify-between gap-2">
+                        <dt class="text-zinc-500">Mano de obra proveedor</dt>
+                        <dd class="font-semibold text-zinc-900"><?= e(fmt_dinero($costos['mano_obra'])) ?></dd>
+                    </div>
+                    <?php endif; ?>
+                    <?php if ($costos['materiales_proveedor'] > 0): ?>
+                    <div class="flex justify-between gap-2">
+                        <dt class="text-zinc-500">Materiales proveedor</dt>
+                        <dd class="font-semibold text-zinc-900"><?= e(fmt_dinero($costos['materiales_proveedor'])) ?></dd>
+                    </div>
+                    <?php endif; ?>
+                    <?php if ($costos['materiales_comprados'] > 0): ?>
+                    <div class="flex justify-between gap-2">
+                        <dt class="text-zinc-500">Materiales comprados</dt>
+                        <dd class="font-semibold text-zinc-900"><?= e(fmt_dinero($costos['materiales_comprados'])) ?></dd>
+                    </div>
+                    <?php endif; ?>
+                    <?php if ($ver_moi && $costos['mano_obra_interna'] > 0): ?>
+                    <div class="flex justify-between gap-2">
+                        <dt class="text-zinc-500 flex items-center gap-1">
+                            Mano de obra interna
+                            <span class="text-[9px] text-bacal-700 bg-bacal-50 px-1 rounded">confid.</span>
+                        </dt>
+                        <dd class="font-semibold text-zinc-900"><?= e(fmt_dinero($costos['mano_obra_interna'])) ?></dd>
+                    </div>
+                    <?php if ($costos['horas_trabajadas'] > 0): ?>
+                    <div class="flex justify-between gap-2 text-[10px] text-zinc-400 -mt-1">
+                        <dt><?= e(fmt_horas_min($costos['horas_trabajadas'])) ?> × <?= e(fmt_dinero($costos['tarifa_aplicada'])) ?>/h</dt>
+                        <dd></dd>
+                    </div>
+                    <?php endif; ?>
+                    <?php endif; ?>
+                    <div class="flex justify-between gap-2 pt-2 mt-1 border-t border-zinc-200">
+                        <dt class="text-zinc-900 font-bold uppercase tracking-wide">Total</dt>
+                        <dd class="font-display text-base font-extrabold text-bacal-700"><?= e(fmt_dinero($total_mostrar)) ?></dd>
+                    </div>
+                </dl>
+
+                <?php if ($costos['horas_trabajadas'] > 0): ?>
+                <div class="flex items-center gap-1.5 mt-2 text-[11px] text-zinc-500">
+                    <i data-lucide="clock" class="w-3 h-3"></i>
+                    Tiempo activo: <strong class="text-zinc-700"><?= e(fmt_horas_min($costos['horas_trabajadas'])) ?></strong>
+                </div>
+                <?php endif; ?>
+
+                <?php if (!empty($incidencia['costo_notas'])): ?>
+                <p class="text-[10px] text-zinc-500 mt-2 pt-2 border-t border-zinc-100 italic">
+                    <?= e($incidencia['costo_notas']) ?>
+                </p>
+                <?php endif; ?>
+
+                <?php if ($total_mostrar > 0): ?>
+                <?php
+                $pct_ext = $total_mostrar > 0 ? round(($costos['externo'] / $total_mostrar) * 100) : 0;
+                $pct_int = 100 - $pct_ext;
+                ?>
+                <div class="flex gap-1 mt-3">
+                    <?php if ($pct_ext > 0): ?>
+                    <div class="h-1.5 rounded-l-full bg-bacal-600" style="width: <?= $pct_ext ?>%"></div>
+                    <?php endif; ?>
+                    <?php if ($pct_int > 0): ?>
+                    <div class="h-1.5 <?= $pct_ext > 0 ? 'rounded-r-full' : 'rounded-full' ?> bg-zinc-400" style="width: <?= $pct_int ?>%"></div>
+                    <?php endif; ?>
+                </div>
+                <div class="flex justify-between text-[9px] text-zinc-400 mt-1">
+                    <span>Externo <?= $pct_ext ?>%</span>
+                    <span>Interno <?= $pct_int ?>%</span>
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
 
             <!-- Acciones rápidas -->
             <?php if ($puede_editar): ?>

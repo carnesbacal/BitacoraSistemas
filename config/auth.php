@@ -29,7 +29,7 @@ define('TIEMPO_SESION_INACTIVA_MIN', 120); // 2 horas de inactividad
  * (por ejemplo se agregan o quitan campos en login()), INCREMENTAR este número.
  * Esto fuerza un logout automático de sesiones viejas que tengan estructura distinta.
  */
-define('SESSION_VERSION', 4);
+define('SESSION_VERSION', 5);
 
 /**
  * Intenta iniciar sesión con usuario y contraseña.
@@ -45,7 +45,8 @@ function login(string $usuario, string $password): array {
     $row = db_one(
         "SELECT u.*, r.nombre AS rol_nombre,
                 r.puede_administrar, r.puede_ver_todas_sucursales,
-                r.puede_resolver, r.puede_crear_solicitud, r.puede_ver_reportes
+                r.puede_resolver, r.puede_crear_solicitud, r.puede_ver_reportes,
+                u.preferencias
          FROM usuarios u
          INNER JOIN roles r ON u.rol_id = r.id
          WHERE u.usuario = :usuario AND u.activo = 1",
@@ -119,6 +120,7 @@ function login(string $usuario, string $password): array {
             'ver_reportes'        => (bool) $row['puede_ver_reportes'],
         ],
         'debe_cambiar_password' => (bool) $row['debe_cambiar_password'],
+        'preferencias' => json_decode((string)($row['preferencias'] ?? '{}'), true) ?: [],
     ];
     $_SESSION['ultima_actividad'] = time();
     $_SESSION['version'] = SESSION_VERSION;

@@ -57,6 +57,7 @@ if (es_post()) {
                 $puesto   = trim((string) input('puesto', ''));
                 $tel      = trim((string) input('telefono', ''));
                 $pass     = (string) input('password', '');
+                $tarifa   = input('tarifa_hora', '') !== '' ? (float) input('tarifa_hora') : null;
 
                 if ($usuario === '')        $errores[] = 'El nombre de usuario es obligatorio.';
                 if (!preg_match('/^[a-z0-9_\.]+$/i', $usuario)) $errores[] = 'El usuario solo puede tener letras, números, guion bajo y punto.';
@@ -72,11 +73,11 @@ if (es_post()) {
                     db_exec(
                         "INSERT INTO usuarios
                          (usuario, password_hash, nombre_completo, email, telefono,
-                          rol_id, sucursal_id, area_id, puesto, debe_cambiar_password, activo)
-                         VALUES (:u, :p, :n, :e, :t, :r, :s, :a, :pu, 1, 1)",
+                          rol_id, sucursal_id, area_id, puesto, tarifa_hora, debe_cambiar_password, activo)
+                         VALUES (:u, :p, :n, :e, :t, :r, :s, :a, :pu, :tar, 1, 1)",
                         ['u' => $usuario, 'p' => $hash, 'n' => $nombre, 'e' => $email ?: null,
                          't' => $tel ?: null, 'r' => $rol_id, 's' => $suc_id, 'a' => $area_id,
-                         'pu' => $puesto ?: null]
+                         'pu' => $puesto ?: null, 'tar' => $tarifa]
                     );
                     $nuevo_id = db_last_id();
                     registrar_auditoria('crear_usuario', 'usuarios', $nuevo_id, "Usuario $usuario creado");
@@ -92,6 +93,7 @@ if (es_post()) {
                 $area_id  = input('area_id', '') !== '' ? (int) input('area_id') : null;
                 $puesto   = trim((string) input('puesto', ''));
                 $tel      = trim((string) input('telefono', ''));
+                $tarifa   = input('tarifa_hora', '') !== '' ? (float) input('tarifa_hora') : null;
 
                 if ($nombre === '') $errores[] = 'El nombre completo es obligatorio.';
                 if ($rol_id <= 0)   $errores[] = 'Debes asignar un rol.';
@@ -108,11 +110,12 @@ if (es_post()) {
                     db_exec(
                         "UPDATE usuarios SET
                             nombre_completo = :n, email = :e, telefono = :t,
-                            rol_id = :r, sucursal_id = :s, area_id = :a, puesto = :pu
+                            rol_id = :r, sucursal_id = :s, area_id = :a, puesto = :pu,
+                            tarifa_hora = :tar
                          WHERE id = :id",
                         ['n' => $nombre, 'e' => $email ?: null, 't' => $tel ?: null,
                          'r' => $rol_id, 's' => $suc_id, 'a' => $area_id,
-                         'pu' => $puesto ?: null, 'id' => $usuario_edit['id']]
+                         'pu' => $puesto ?: null, 'tar' => $tarifa, 'id' => $usuario_edit['id']]
                     );
                     registrar_auditoria('editar_usuario', 'usuarios', $usuario_edit['id'], "Usuario {$usuario_edit['usuario']} editado");
                     flash_set('success', 'Usuario actualizado.');
@@ -292,6 +295,22 @@ if ($accion === 'nuevo' || ($accion === 'editar' && $usuario_edit)):
                            value="<?= e($es_edicion ? (string) $u['puesto'] : (string) input('puesto', '')) ?>"
                            placeholder="ej. Gerente de sucursal"
                            class="w-full px-3 py-2 rounded-lg border border-zinc-300 text-sm focus:outline-none focus:border-bacal-700">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-zinc-700 mb-1 uppercase tracking-wide flex items-center gap-1.5">
+                        <i data-lucide="hand-coins" class="w-3.5 h-3.5 text-bacal-700"></i>
+                        Tarifa por hora
+                        <span class="text-[9px] font-normal text-bacal-700 bg-bacal-50 px-1.5 py-0.5 rounded normal-case">Solo admin · confidencial</span>
+                    </label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-sm">$</span>
+                        <input type="number" name="tarifa_hora" min="0" step="0.01"
+                               value="<?= e($es_edicion ? (string) ($u['tarifa_hora'] ?? '') : (string) input('tarifa_hora', '')) ?>"
+                               placeholder="0.00"
+                               class="w-full pl-7 pr-3 py-2 rounded-lg border border-zinc-300 text-sm focus:outline-none focus:border-bacal-700">
+                    </div>
+                    <p class="text-[10px] text-zinc-500 mt-1">Costo por hora del técnico. Se usa para calcular el costo de mano de obra interna de las incidencias. Los técnicos NO pueden ver este dato.</p>
                 </div>
 
                 <div>

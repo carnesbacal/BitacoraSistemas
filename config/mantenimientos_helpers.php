@@ -83,6 +83,72 @@ function calcular_proxima_fecha(string $fecha_base, string $tipo, int $valor): s
 
 
 // ============================================================================
+// Equipos de un mantenimiento (tabla puente mantenimiento_equipos)
+// ----------------------------------------------------------------------------
+// Un mantenimiento puede cubrir varios equipos. `mantenimientos.equipo_id`
+// se conserva como "equipo principal"; la tabla puente guarda TODOS.
+// ============================================================================
+
+/**
+ * IDs de los equipos asociados a un mantenimiento.
+ * Si por alguna razón aún no hay filas en la puente, cae al equipo principal.
+ */
+function mantenimiento_equipos_ids(int $mantenimiento_id): array {
+    $rows = db_all(
+        "SELECT equipo_id FROM mantenimiento_equipos WHERE mantenimiento_id = :id ORDER BY equipo_id",
+        ['id' => $mantenimiento_id]
+    );
+    $ids = array_map(fn($r) => (int) $r['equipo_id'], $rows);
+    if (!$ids) {
+        $m = db_one("SELECT equipo_id FROM mantenimientos WHERE id = :id", ['id' => $mantenimiento_id]);
+        if ($m && $m['equipo_id']) $ids = [(int) $m['equipo_id']];
+    }
+    return $ids;
+}
+
+/**
+ * Datos completos (para mostrar) de los equipos de un mantenimiento.
+ */
+function mantenimiento_equipos(int $mantenimiento_id): array {
+    return db_all(
+        "SELECT e.id, e.codigo_inventario, e.nombre, e.tipo, e.sucursal_id,
+                s.nombre sucursal_nombre
+         FROM mantenimiento_equipos me
+         INNER JOIN equipos e ON me.equipo_id = e.id
+         INNER JOIN sucursales s ON e.sucursal_id = s.id
+         WHERE me.mantenimiento_id = :id
+         ORDER BY s.nombre, e.codigo_inventario",
+        ['id' => $mantenimiento_id]
+    );
+}
+
+/**
+ * Reemplaza el conjunto de equipos de un mantenimiento por el indicado.
+ * Mantiene el primer equipo como `mantenimientos.equipo_id` (equipo principal).
+ * Los IDs se normalizan (enteros únicos > 0).
+ */
+function sincronizar_mantenimiento_equipos(int $mantenimiento_id, array $equipo_ids): void {
+    $ids = array_values(array_unique(array_filter(
+        array_map('intval', $equipo_ids),
+        fn($v) => $v > 0
+    )));
+    if (!$ids) return;
+
+    db_exec("DELETE FROM mantenimiento_equipos WHERE mantenimiento_id = :id", ['id' => $mantenimiento_id]);
+    foreach ($ids as $eid) {
+        db_exec(
+            "INSERT IGNORE INTO mantenimiento_equipos (mantenimiento_id, equipo_id) VALUES (:m, :e)",
+            ['m' => $mantenimiento_id, 'e' => $eid]
+        );
+    }
+    db_exec(
+        "UPDATE mantenimientos SET equipo_id = :e WHERE id = :id",
+        ['e' => $ids[0], 'id' => $mantenimiento_id]
+    );
+}
+
+
+// ============================================================================
 // Generar siguiente mantenimiento recurrente
 // ============================================================================
 
@@ -139,7 +205,15 @@ function generar_siguiente_recurrente(int $mantenimiento_id): ?int {
         ]
     );
 
-    return (int) db_last_id();
+    $nuevo_id = (int) db_last_id();
+
+    // Copiar el conjunto de equipos del mantenimiento original a la nueva ocurrencia
+    $equipos = mantenimiento_equipos_ids($mantenimiento_id);
+    if ($equipos) {
+        sincronizar_mantenimiento_equipos($nuevo_id, $equipos);
+    }
+
+    return $nuevo_id;
 }
 
 

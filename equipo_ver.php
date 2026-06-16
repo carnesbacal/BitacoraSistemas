@@ -67,23 +67,29 @@ $fotos = db_all(
     ['id' => $id]
 );
 
+// Mantenimientos en los que participa este equipo (vía tabla puente, para
+// incluir también los mantenimientos agrupados que cubren varios equipos).
 $mantenimientos_proximos = db_all(
-    "SELECT m.*, u.nombre_completo asignado_nombre, p.nombre proveedor_nombre
+    "SELECT m.*, u.nombre_completo asignado_nombre, p.nombre proveedor_nombre,
+            (SELECT COUNT(*) FROM mantenimiento_equipos me2 WHERE me2.mantenimiento_id = m.id) AS num_equipos
      FROM mantenimientos m
+     INNER JOIN mantenimiento_equipos me ON me.mantenimiento_id = m.id AND me.equipo_id = :id
      LEFT JOIN usuarios u ON m.asignado_a_id = u.id
      LEFT JOIN proveedores p ON m.proveedor_id = p.id
-     WHERE m.equipo_id = :id AND m.estado IN ('programado','proximo','en_progreso')
+     WHERE m.estado IN ('programado','proximo','en_progreso')
      ORDER BY m.fecha_programada ASC, m.hora_programada ASC
      LIMIT 10",
     ['id' => $id]
 );
 
 $mantenimientos_historial = db_all(
-    "SELECT m.*, u.nombre_completo realizado_nombre, p.nombre proveedor_nombre
+    "SELECT m.*, u.nombre_completo realizado_nombre, p.nombre proveedor_nombre,
+            (SELECT COUNT(*) FROM mantenimiento_equipos me2 WHERE me2.mantenimiento_id = m.id) AS num_equipos
      FROM mantenimientos m
+     INNER JOIN mantenimiento_equipos me ON me.mantenimiento_id = m.id AND me.equipo_id = :id
      LEFT JOIN usuarios u ON m.realizado_por_id = u.id
      LEFT JOIN proveedores p ON m.proveedor_id = p.id
-     WHERE m.equipo_id = :id AND m.estado IN ('completado','cancelado','vencido')
+     WHERE m.estado IN ('completado','cancelado','vencido')
      ORDER BY m.fecha_completado DESC, m.fecha_programada DESC
      LIMIT 20",
     ['id' => $id]
@@ -124,7 +130,9 @@ $kpis = db_one(
         (SELECT COUNT(*) FROM incidencias WHERE equipo_id = :id1) AS total_incidencias,
         (SELECT COUNT(*) FROM incidencias i INNER JOIN estados e ON i.estado_id = e.id
          WHERE i.equipo_id = :id2 AND e.es_final = 0) AS incidencias_abiertas,
-        (SELECT COUNT(*) FROM mantenimientos WHERE equipo_id = :id3 AND estado = 'completado') AS mant_completados,
+        (SELECT COUNT(*) FROM mantenimientos m
+          INNER JOIN mantenimiento_equipos me ON me.mantenimiento_id = m.id
+          WHERE me.equipo_id = :id3 AND m.estado = 'completado') AS mant_completados,
         (SELECT COALESCE(SUM(costo), 0) FROM mantenimientos WHERE equipo_id = :id4 AND estado = 'completado') AS costo_total_mant",
     array_fill_keys(['id1','id2','id3','id4'], $id)
 );

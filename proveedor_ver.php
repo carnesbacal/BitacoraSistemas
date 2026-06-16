@@ -40,6 +40,12 @@ if (!$p) {
 $contactos = db_all("SELECT * FROM proveedor_contactos WHERE proveedor_id = :pid ORDER BY es_principal DESC, orden ASC", ['pid' => $id]);
 $marcas    = db_all("SELECT marca FROM proveedor_marcas WHERE proveedor_id = :pid ORDER BY marca", ['pid' => $id]);
 $tipos     = db_all("SELECT tipo FROM proveedor_tipos_equipo WHERE proveedor_id = :pid ORDER BY tipo", ['pid' => $id]);
+$sucursales_prov = db_all(
+    "SELECT s.nombre, s.codigo FROM proveedor_sucursales ps
+     JOIN sucursales s ON ps.sucursal_id = s.id
+     WHERE ps.proveedor_id = :pid ORDER BY s.nombre",
+    ['pid' => $id]
+);
 
 // Equipos vinculados
 $equipos = db_all(
@@ -333,6 +339,28 @@ require_once __DIR__ . '/config/header.php';
                         <i data-lucide="clock" class="w-3.5 h-3.5 text-zinc-400"></i>
                         <?= e($p['horario_atencion']) ?>
                     </p>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <!-- Sucursales que atiende -->
+            <div class="bg-white rounded-xl border border-zinc-200 shadow-sm p-5">
+                <h3 class="text-xs font-bold text-zinc-600 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                    <i data-lucide="store" class="w-3.5 h-3.5"></i> Sucursales que atiende
+                </h3>
+                <?php if (empty($sucursales_prov)): ?>
+                <div class="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
+                    <span class="text-sm font-medium text-emerald-800">Todas las sucursales</span>
+                </div>
+                <?php else: ?>
+                <div class="flex flex-wrap gap-1.5">
+                    <?php foreach ($sucursales_prov as $s): ?>
+                    <span class="inline-flex items-center gap-1 text-xs font-semibold text-zinc-700 bg-zinc-100 px-2.5 py-1 rounded-lg">
+                        <i data-lucide="map-pin" class="w-3 h-3 text-bacal-700"></i>
+                        <?= e($s['nombre']) ?>
+                    </span>
+                    <?php endforeach; ?>
                 </div>
                 <?php endif; ?>
             </div>
