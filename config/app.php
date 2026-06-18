@@ -12,7 +12,7 @@
 
 // --- Metadata de la aplicación ---
 define('APP_NAME',    'Carnes Bacal · Mantenimiento');
-define('APP_VERSION', '2.0.9');
+define('APP_VERSION', '2.0.13');
 
 /**
  * APP_URL se auto-detecta a partir de la ubicación real del proyecto.

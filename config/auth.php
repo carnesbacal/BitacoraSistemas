@@ -93,6 +93,11 @@ function login(string $usuario, string $password): array {
         ['id' => $row['id']]
     );
 
+    // Limpiar TODOS los datos de la sesión anterior antes de regenerar.
+    // Necesario para evitar que datos de un usuario previo (ej. sesión de prueba
+    // de otra cuenta en el mismo navegador) se copien al nuevo session_id.
+    session_unset();
+
     // Regenerar ID de sesión para prevenir fixation
     session_regenerate_id(true);
 

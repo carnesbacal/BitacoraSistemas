@@ -10,6 +10,7 @@
 require_once __DIR__ . '/config/db.php';
 require_once __DIR__ . '/config/auth.php';
 require_once __DIR__ . '/config/helpers.php';
+require_once __DIR__ . '/config/notificaciones_helpers.php';
 
 requerir_login();
 
@@ -63,6 +64,41 @@ if (es_post()) {
                     registrar_auditoria('editar_perfil', 'usuarios', $id, 'Editó su perfil');
                     flash_set('success', 'Perfil actualizado correctamente.');
                     header('Location: ' . url('mi_perfil.php'));
+                    exit;
+                }
+            } elseif ($op === 'notificaciones') {
+                // Guardar Chat ID de Telegram (solo dígitos y guión para IDs de grupos negativos)
+                $tg_id = trim((string) input('telegram_chat_id', ''));
+                if ($tg_id !== '' && !preg_match('/^-?\d+$/', $tg_id)) {
+                    $errores[] = 'El Chat ID de Telegram solo puede contener números (puede ser negativo para grupos).';
+                } else {
+                    db_exec(
+                        "UPDATE usuarios SET telegram_chat_id = :tgid WHERE id = :id",
+                        ['tgid' => $tg_id !== '' ? $tg_id : null, 'id' => $id]
+                    );
+
+                    // Guardar preferencias por tipo
+                    foreach (array_keys(NOTIF_TIPOS) as $tipo) {
+                        $canal_email = input("pref_email_{$tipo}") ? 1 : 0;
+                        $canal_tg    = input("pref_tg_{$tipo}") ? 1 : 0;
+                        db_exec(
+                            "INSERT INTO notificacion_preferencias
+                                (usuario_id, tipo, canal_email, canal_telegram)
+                             VALUES (:uid, :tipo, :email, :tg)
+                             ON DUPLICATE KEY UPDATE
+                                canal_email = :email2, canal_telegram = :tg2",
+                            [
+                                'uid'    => $id,
+                                'tipo'   => $tipo,
+                                'email'  => $canal_email,
+                                'tg'     => $canal_tg,
+                                'email2' => $canal_email,
+                                'tg2'    => $canal_tg,
+                            ]
+                        );
+                    }
+                    flash_set('success', 'Preferencias de notificación guardadas.');
+                    header('Location: ' . url('mi_perfil.php') . '#preferencias');
                     exit;
                 }
             } elseif ($op === 'eliminar_avatar') {
@@ -124,6 +160,21 @@ $actividad = db_all(
 
 // Tamaños máximos de avatar
 $MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
+
+// ----------------------------------------------------------------------------
+// Preferencias de notificación del usuario
+// ----------------------------------------------------------------------------
+$notif_prefs_raw = db_all(
+    "SELECT tipo, canal_email, canal_telegram FROM notificacion_preferencias WHERE usuario_id = :uid",
+    ['uid' => $id]
+);
+$notif_prefs = [];
+foreach ($notif_prefs_raw as $r) {
+    $notif_prefs[$r['tipo']] = $r;
+}
+$cfg_notif = db_one("SELECT smtp_activo, telegram_activo FROM configuracion_notificaciones WHERE id = 1") ?? [];
+$canal_email_activo    = !empty($cfg_notif['smtp_activo']);
+$canal_telegram_activo = !empty($cfg_notif['telegram_activo']);
 
 $titulo_pagina = 'Mi perfil';
 $pagina_activa = 'mi_perfil';
@@ -328,6 +379,120 @@ require_once __DIR__ . '/config/header.php';
                     Guardar preferencias
                 </button>
             </div>
+        </form>
+
+        <!-- ================================================================
+             Preferencias de notificaciones externas
+        ================================================================ -->
+        <form method="POST" class="bg-white rounded-xl border border-zinc-200 shadow-sm p-6 space-y-4 mt-4">
+            <?= csrf_input() ?>
+            <input type="hidden" name="op" value="notificaciones">
+
+            <h3 class="font-display text-base font-bold text-zinc-900">Notificaciones externas</h3>
+
+            <?php if (!$canal_email_activo && !$canal_telegram_activo): ?>
+            <div class="bg-zinc-50 border border-zinc-200 rounded-lg px-4 py-3 text-sm text-zinc-500">
+                <i data-lucide="info" class="w-4 h-4 inline-block mr-1 text-zinc-400"></i>
+                El administrador aún no ha configurado ningún canal externo (Email o Telegram).
+            </div>
+            <?php else: ?>
+
+            <?php if ($canal_telegram_activo): ?>
+            <div>
+                <label class="block text-xs font-bold text-zinc-700 mb-1 uppercase tracking-wide">Tu Chat ID de Telegram</label>
+                <input type="text" name="telegram_chat_id"
+                       value="<?= e((string)($u_data['telegram_chat_id'] ?? '')) ?>"
+                       placeholder="Ej. 123456789"
+                       class="w-full md:w-64 px-3 py-2 rounded-lg border border-zinc-300 bg-white text-sm focus:outline-none focus:border-bacal-700">
+                <p class="text-[10px] text-zinc-500 mt-1">
+                    Para obtenerlo: busca <span class="font-mono bg-zinc-100 px-1 rounded">@userinfobot</span> en Telegram y escríbele cualquier mensaje — te responderá con tu ID.
+                    También debes enviarle un mensaje primero al bot del sistema para activar las notificaciones.
+                </p>
+            </div>
+            <?php endif; ?>
+
+            <!-- Tabla de preferencias por tipo -->
+            <div class="overflow-x-auto rounded-lg border border-zinc-200">
+                <table class="w-full text-sm">
+                    <thead class="bg-zinc-50 text-zinc-500 text-xs uppercase tracking-wider">
+                        <tr>
+                            <th class="px-4 py-2.5 text-left font-semibold">Tipo de notificación</th>
+                            <th class="px-4 py-2.5 text-center font-semibold">In-App</th>
+                            <?php if ($canal_email_activo): ?>
+                            <th class="px-4 py-2.5 text-center font-semibold">
+                                <span class="flex items-center justify-center gap-1">
+                                    <i data-lucide="mail" class="w-3.5 h-3.5"></i> Email
+                                </span>
+                            </th>
+                            <?php endif; ?>
+                            <?php if ($canal_telegram_activo): ?>
+                            <th class="px-4 py-2.5 text-center font-semibold">
+                                <span class="flex items-center justify-center gap-1">
+                                    <i data-lucide="send" class="w-3.5 h-3.5"></i> Telegram
+                                </span>
+                            </th>
+                            <?php endif; ?>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-zinc-100">
+                        <?php
+                        $etiquetas_tipo = [
+                            'asignacion'             => 'Se me asigna una incidencia',
+                            'cambio_estado'          => 'Cambio de estado en mis incidencias',
+                            'comentario'             => 'Nuevo comentario en mis incidencias',
+                            'mencion'                => 'Me mencionan en un comentario',
+                            'reincidencia'           => 'Se detecta una reincidencia',
+                            'sla_vencido'            => 'SLA vencido',
+                            'sla_riesgo'             => 'SLA en riesgo',
+                            'incidencia_creada'      => 'Nueva incidencia creada',
+                            'incidencia_resuelta'    => 'Incidencia resuelta',
+                            'mantenimiento_proximo'  => 'Mantenimiento próximo',
+                            'mantenimiento_vencido'  => 'Mantenimiento vencido',
+                            'mantenimiento_completado' => 'Mantenimiento completado',
+                            'sistema'                => 'Avisos del sistema',
+                        ];
+                        foreach (array_keys(NOTIF_TIPOS) as $tipo):
+                            $pref = $notif_prefs[$tipo] ?? null;
+                            // Defaults: email en asignacion y mencion si no hay registro
+                            $def_email = in_array($tipo, ['asignacion','mencion'], true) ? 1 : 0;
+                            $val_email = $pref ? (int)$pref['canal_email'] : $def_email;
+                            $val_tg    = $pref ? (int)$pref['canal_telegram'] : 0;
+                        ?>
+                        <tr class="hover:bg-zinc-50 transition-colors">
+                            <td class="px-4 py-2.5 text-zinc-700">
+                                <?= e($etiquetas_tipo[$tipo] ?? $tipo) ?>
+                            </td>
+                            <td class="px-4 py-2.5 text-center">
+                                <span class="text-emerald-600" title="Siempre activado">
+                                    <i data-lucide="check" class="w-4 h-4 inline-block"></i>
+                                </span>
+                            </td>
+                            <?php if ($canal_email_activo): ?>
+                            <td class="px-4 py-2.5 text-center">
+                                <input type="checkbox" name="pref_email_<?= $tipo ?>" value="1"
+                                       <?= $val_email ? 'checked' : '' ?>
+                                       class="w-4 h-4 accent-bacal-700">
+                            </td>
+                            <?php endif; ?>
+                            <?php if ($canal_telegram_activo): ?>
+                            <td class="px-4 py-2.5 text-center">
+                                <input type="checkbox" name="pref_tg_<?= $tipo ?>" value="1"
+                                       <?= $val_tg ? 'checked' : '' ?>
+                                       class="w-4 h-4 accent-sky-500">
+                            </td>
+                            <?php endif; ?>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="flex justify-end pt-3 border-t border-zinc-100">
+                <button type="submit" class="px-5 py-2 rounded-lg bg-bacal-700 hover:bg-bacal-800 text-white text-sm font-semibold">
+                    Guardar preferencias de notificación
+                </button>
+            </div>
+            <?php endif; ?>
         </form>
     </div>
 

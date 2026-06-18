@@ -11,6 +11,7 @@
 
 require_once __DIR__ . '/db.php';
 require_once __DIR__ . '/helpers.php';
+require_once __DIR__ . '/notificaciones_canales.php';
 
 // ============================================================================
 // Tipos de notificación (para íconos y colores en la UI)
@@ -120,6 +121,15 @@ function crear_notificacion(
 
         $sql = "INSERT INTO notificaciones (" . implode(',', $columnas) . ") VALUES (" . implode(',', $valores) . ")";
         db_exec($sql, $params);
+        $notif_id = db_last_id() ?: null;
+
+        // Despachar canales externos (email / Telegram) — no bloquea aunque falle
+        try {
+            dispatch_notificacion($usuario_id, $tipo, $titulo, $mensaje, $url, $notif_id);
+        } catch (Throwable $de) {
+            error_log('dispatch_notificacion fallida: ' . $de->getMessage());
+        }
+
         return true;
     } catch (Throwable $e) {
         error_log('crear_notificacion fallida: ' . $e->getMessage());
