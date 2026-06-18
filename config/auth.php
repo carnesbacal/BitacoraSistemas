@@ -16,6 +16,16 @@ if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.use_only_cookies', '1');
     ini_set('session.cookie_httponly', '1');
     ini_set('session.use_strict_mode', '1');
+
+    // Aislar la cookie PHPSESSID a la ruta de ESTA app.
+    // Sin esto, dos instalaciones en el mismo XAMPP (p.ej. local y staging)
+    // comparten la misma cookie y se mezclan las sesiones.
+    $cookie_path = defined('APP_URL')
+        ? rtrim(parse_url(APP_URL, PHP_URL_PATH) ?: '/', '/') . '/'
+        : '/';
+    ini_set('session.cookie_path', $cookie_path);
+    unset($cookie_path);
+
     session_start();
 }
 
@@ -28,8 +38,11 @@ define('TIEMPO_SESION_INACTIVA_MIN', 120); // 2 horas de inactividad
  * Versión del esquema de sesión. Si cambia la estructura de $_SESSION['usuario']
  * (por ejemplo se agregan o quitan campos en login()), INCREMENTAR este número.
  * Esto fuerza un logout automático de sesiones viejas que tengan estructura distinta.
+ *
+ * v6: Agrega validación cruzada ID↔usuario contra BD para prevenir contaminación
+ *     de sesiones entre entornos (local XAMPP vs web cPanel).
  */
-define('SESSION_VERSION', 5);
+define('SESSION_VERSION', 6);
 
 /**
  * Intenta iniciar sesión con usuario y contraseña.
@@ -206,15 +219,45 @@ function esta_logueado(): bool {
     }
 
     // Verificar que la sesión sigue activa en BD (admin pudo cerrarla remotamente)
-    $estado = sesion_sigue_activa();
+    $estado = sesion_sigue_activa($u['id']);
     if (!$estado['activa']) {
-        // Guardar motivo para mostrarlo en la pantalla de login si se quiere
         $_SESSION['motivo_cierre_forzado'] = $estado['motivo'] ?? 'sesión cerrada por administrador';
         limpiar_sesion_invalida();
         return false;
     }
 
-    $_SESSION['ultima_actividad'] = time();
+    // --------------------------------------------------------------------
+    // Validación cruzada ID ↔ usuario en BD (cada 5 minutos).
+    // Detecta sesiones contaminadas donde $_SESSION['usuario']['id'] no
+    // corresponde al username guardado en la misma sesión.
+    // Causa real del bug: mezcla de sesiones entre entornos que comparten BD.
+    // --------------------------------------------------------------------
+    $ahora = time();
+    if (!isset($_SESSION['_id_validado_en']) || ($ahora - (int)$_SESSION['_id_validado_en']) > 300) {
+        try {
+            $db_check = db_one(
+                "SELECT id FROM usuarios WHERE usuario = :usr AND activo = 1",
+                ['usr' => $u['usuario']]
+            );
+            if (!$db_check || (int)$db_check['id'] !== (int)$u['id']) {
+                // El ID en sesión no corresponde al username → sesión corrupta
+                error_log("[AUTH] Sesión corrupta detectada: usuario={$u['usuario']} id_sesion={$u['id']} id_bd=" . ($db_check['id'] ?? 'null') . " session_id=" . session_id());
+                limpiar_sesion_invalida();
+                return false;
+            }
+        } catch (Throwable $e) {
+            // Si la BD no está disponible, no forzar logout (mejor degradar que romper)
+        }
+        $_SESSION['_id_validado_en'] = $ahora;
+    }
+
+    $_SESSION['ultima_actividad'] = $ahora;
+
+    // Limpieza de sesiones huérfanas: 1% de probabilidad por request para no añadir latencia
+    if (mt_rand(1, 100) === 1) {
+        limpiar_sesiones_huerfanas();
+    }
+
     return true;
 }
 

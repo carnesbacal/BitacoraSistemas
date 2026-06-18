@@ -106,22 +106,32 @@ function registrar_sesion_activa(int $usuario_id): void {
 }
 
 /**
- * Verifica que la sesión PHP actual sigue marcada como activa en BD.
- * Si fue forzada a cerrarse remotamente, retorna false (motivo de cierre opcional).
- * También actualiza ultima_actividad.
+ * Verifica que la sesión PHP actual sigue marcada como activa en BD
+ * Y que pertenece al $usuario_id indicado.
+ * Esto previene que un session_id de otro entorno o usuario sea aceptado.
+ *
+ * @param int|null $usuario_id  ID del usuario en sesión. null = sin verificación de usuario (legacy).
  */
-function sesion_sigue_activa(): array {
+function sesion_sigue_activa(?int $usuario_id = null): array {
     $session_id = session_id();
     if (empty($session_id)) return ['activa' => false, 'motivo' => null];
 
-    $row = db_one(
-        "SELECT activa, motivo_cierre FROM sesiones WHERE session_id = :sid LIMIT 1",
-        ['sid' => $session_id]
-    );
+    if ($usuario_id !== null) {
+        $row = db_one(
+            "SELECT activa, motivo_cierre FROM sesiones
+             WHERE session_id = :sid AND usuario_id = :uid LIMIT 1",
+            ['sid' => $session_id, 'uid' => $usuario_id]
+        );
+    } else {
+        $row = db_one(
+            "SELECT activa, motivo_cierre FROM sesiones WHERE session_id = :sid LIMIT 1",
+            ['sid' => $session_id]
+        );
+    }
 
     if (!$row) {
-        // No hay registro en BD: puede ser una sesión vieja, no la consideramos válida
-        // pero tampoco fuerza logout (sería muy agresivo). Retornamos true.
+        // Sin registro: sesión nueva o de otro entorno. La validación cruzada
+        // ID↔usuario en esta_logueado() detecta contaminaciones reales.
         return ['activa' => true, 'motivo' => null];
     }
 
@@ -129,9 +139,10 @@ function sesion_sigue_activa(): array {
         return ['activa' => false, 'motivo' => $row['motivo_cierre']];
     }
 
-    // Actualizar ultima_actividad (ON UPDATE CURRENT_TIMESTAMP lo hace solo cuando hay un cambio)
-    db_exec("UPDATE sesiones SET ultima_actividad = NOW() WHERE session_id = :sid",
-        ['sid' => $session_id]);
+    db_exec(
+        "UPDATE sesiones SET ultima_actividad = NOW() WHERE session_id = :sid",
+        ['sid' => $session_id]
+    );
 
     return ['activa' => true, 'motivo' => null];
 }
@@ -205,6 +216,31 @@ function cerrar_todas_sesiones_usuario(int $usuario_id, string $motivo = 'cerrad
         );
     }
     return $total;
+}
+
+/**
+ * Limpia sesiones huérfanas: registros marcados como activos en BD
+ * pero cuya última actividad supera el tiempo de inactividad permitido.
+ * Se llama automáticamente en esta_logueado() con probabilidad 1/100
+ * para no agregar latencia en cada request.
+ *
+ * También cierra sesiones "activas" de más de 8 horas sin actividad.
+ */
+function limpiar_sesiones_huerfanas(): void {
+    $horas_max = 8; // sesión activa por más de 8h sin actividad → cerrar
+    try {
+        db_exec(
+            "UPDATE sesiones
+             SET activa = 0,
+                 motivo_cierre = 'expirada por inactividad (cleanup automático)',
+                 cerrada_en = NOW()
+             WHERE activa = 1
+               AND ultima_actividad < NOW() - INTERVAL :h HOUR",
+            ['h' => $horas_max]
+        );
+    } catch (Throwable $e) {
+        // No interrumpir la ejecución si falla el cleanup
+    }
 }
 
 /**
