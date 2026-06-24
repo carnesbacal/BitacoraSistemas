@@ -11,7 +11,7 @@
  */
 
 // --- Metadata de la aplicación ---
-define('APP_NAME',    'Carnes Bacal · Mantenimiento');
+define('APP_NAME',    'SIGSA · Carnes Bacal');
 define('APP_VERSION', '2.0.13');
 
 /**
